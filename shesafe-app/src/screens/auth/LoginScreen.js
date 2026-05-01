@@ -1,10 +1,10 @@
-// SheSafe — Login Screen
+// SheSafe — Login Screen v3 (World-Class UI)
 import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity,
-  Animated, Alert, ActivityIndicator, StatusBar, KeyboardAvoidingView, Platform, Image
+  Animated, Alert, ActivityIndicator, StatusBar,
+  KeyboardAvoidingView, Platform, SafeAreaView, Image, ScrollView
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { login } from '../../services/AuthService';
 
 export default function LoginScreen({ navigation }) {
@@ -12,128 +12,170 @@ export default function LoginScreen({ navigation }) {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPass, setShowPass] = useState(false);
+  const [focusedField, setFocusedField] = useState(null);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(30)).current;
+  const slideAnim = useRef(new Animated.Value(24)).current;
 
   useEffect(() => {
     Animated.parallel([
-      Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }),
-      Animated.timing(slideAnim, { toValue: 0, duration: 500, useNativeDriver: true }),
+      Animated.timing(fadeAnim, { toValue: 1, duration: 450, useNativeDriver: true }),
+      Animated.timing(slideAnim, { toValue: 0, duration: 450, useNativeDriver: true }),
     ]).start();
   }, []);
 
   async function handleLogin() {
-    if (!phone.trim() || !password.trim()) {
-      Alert.alert('Required', 'Please enter your phone number and password');
-      return;
-    }
+    if (!phone.trim()) { Alert.alert('Required', 'Enter your phone number'); return; }
+    if (!password.trim()) { Alert.alert('Required', 'Enter your password'); return; }
     setLoading(true);
     try {
       await login({ phone: phone.trim(), password });
       navigation.reset({ index: 0, routes: [{ name: 'Main' }] });
     } catch (err) {
-      Alert.alert('Sign In Failed', err.message || 'Check your phone number and password');
+      Alert.alert('Sign In Failed', err.message || 'Check your credentials and try again.');
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <SafeAreaView style={styles.safe}>
       <StatusBar barStyle="dark-content" backgroundColor="#fff" />
-      <LinearGradient colors={['#F5F3FF', '#FFFFFF', '#FFFFFF']} style={StyleSheet.absoluteFillObject} />
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
 
-      <View style={styles.container}>
-        <Animated.View style={[styles.header, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-            <Text style={styles.backTxt}>‹ Back</Text>
-          </TouchableOpacity>
-          <Image source={require('../../../assets/shesafe-logo.png')} style={styles.logoImage} resizeMode="contain" />
-          <Text style={styles.title}>Welcome back</Text>
-          <Text style={styles.subtitle}>Sign in to SheSafe</Text>
-        </Animated.View>
-
-        <Animated.View style={[styles.form, { opacity: fadeAnim }]}>
-          <Text style={styles.label}>Phone Number</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="+91 98765 43210"
-            placeholderTextColor="#9CA3AF"
-            value={phone}
-            onChangeText={setPhone}
-            keyboardType="phone-pad"
-            autoCapitalize="none"
-          />
-
-          <Text style={styles.label}>Password</Text>
-          <View style={styles.passRow}>
-            <TextInput
-              style={[styles.input, { flex: 1, marginBottom: 0 }]}
-              placeholder="Your password"
-              placeholderTextColor="#9CA3AF"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry={!showPass}
-            />
-            <TouchableOpacity onPress={() => setShowPass(!showPass)} style={styles.showBtn}>
-              <Text style={styles.showTxt}>{showPass ? '🙈' : '👁️'}</Text>
+          <Animated.View style={[styles.header, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
+            <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+              <Text style={styles.backTxt}>← Back</Text>
             </TouchableOpacity>
-          </View>
+            <Image source={require('../../../assets/shesafe-logo.png')} style={styles.logo} resizeMode="contain" />
+            <Text style={styles.title}>Welcome back</Text>
+            <Text style={styles.subtitle}>Sign in to SheSafe</Text>
+          </Animated.View>
 
-          <TouchableOpacity style={styles.signInBtn} onPress={handleLogin} disabled={loading}>
-            {loading
-              ? <ActivityIndicator color="#fff" />
-              : <Text style={styles.signInText}>Sign In →</Text>
-            }
-          </TouchableOpacity>
+          <Animated.View style={[styles.form, { opacity: fadeAnim }]}>
 
-          <TouchableOpacity onPress={() => navigation.navigate('Welcome')} style={styles.registerRow}>
-            <Text style={styles.registerText}>Don't have an account? </Text>
-            <Text style={styles.registerLink}>Create one →</Text>
-          </TouchableOpacity>
-        </Animated.View>
-      </View>
-    </KeyboardAvoidingView>
+            {/* Phone */}
+            <Text style={styles.label}>Phone Number</Text>
+            <TextInput
+              style={[styles.input, focusedField === 'phone' && styles.inputFocused]}
+              placeholder="+91 98765 43210"
+              placeholderTextColor="#9CA3AF"
+              value={phone}
+              onChangeText={setPhone}
+              keyboardType="phone-pad"
+              autoCapitalize="none"
+              onFocus={() => setFocusedField('phone')}
+              onBlur={() => setFocusedField(null)}
+            />
+
+            {/* Password */}
+            <Text style={[styles.label, { marginTop: 20 }]}>Password</Text>
+            <View style={styles.passWrap}>
+              <TextInput
+                style={[styles.input, styles.passInput, focusedField === 'pass' && styles.inputFocused]}
+                placeholder="Your password"
+                placeholderTextColor="#9CA3AF"
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={!showPass}
+                onFocus={() => setFocusedField('pass')}
+                onBlur={() => setFocusedField(null)}
+              />
+              <TouchableOpacity
+                style={styles.eyeBtn}
+                onPress={() => setShowPass(!showPass)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Text style={styles.eyeIcon}>{showPass ? '🙈' : '👁️'}</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* CTA */}
+            <TouchableOpacity
+              style={[styles.signInBtn, loading && styles.signInBtnDisabled]}
+              onPress={handleLogin}
+              disabled={loading}
+              activeOpacity={0.88}
+            >
+              {loading
+                ? <ActivityIndicator color="#fff" size="small" />
+                : <Text style={styles.signInText}>Sign In →</Text>
+              }
+            </TouchableOpacity>
+
+            {/* Divider */}
+            <View style={styles.divider}>
+              <View style={styles.divLine} />
+              <Text style={styles.divText}>or</Text>
+              <View style={styles.divLine} />
+            </View>
+
+            {/* Register */}
+            <TouchableOpacity
+              style={styles.registerBtn}
+              onPress={() => navigation.navigate('Welcome')}
+              activeOpacity={0.82}
+            >
+              <Text style={styles.registerBtnText}>Create New Account</Text>
+            </TouchableOpacity>
+
+          </Animated.View>
+
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
-const INPUT_BG = '#F3F4F6';
-const INPUT_BORDER = '#D1D5DB';
-const TEXT_COLOR = '#111827';
-
 const styles = StyleSheet.create({
-  container: { flex: 1, paddingHorizontal: 24 },
-  header: { paddingTop: 56, alignItems: 'center', marginBottom: 32 },
-  backBtn: { alignSelf: 'flex-start', marginBottom: 24 },
-  backTxt: { fontSize: 16, color: '#6C3CE1', fontWeight: '600' },
-  logoImage: { width: 180, height: 56, marginBottom: 16 },
-  title: { fontSize: 26, fontWeight: '800', color: '#111827' },
-  subtitle: { fontSize: 14, color: '#6B7280', marginTop: 4 },
+  safe: { flex: 1, backgroundColor: '#fff' },
+  scroll: { paddingHorizontal: 24, paddingTop: 20, paddingBottom: 40 },
+
+  header: { alignItems: 'center', marginBottom: 40 },
+  backBtn: { alignSelf: 'flex-start', marginBottom: 28 },
+  backTxt: { fontSize: 15, color: '#4F35D2', fontWeight: '600' },
+  logo: { width: 190, height: 52, marginBottom: 24 },
+  title: { fontSize: 26, fontWeight: '800', color: '#111827', letterSpacing: -0.5 },
+  subtitle: { fontSize: 14, color: '#6B7280', marginTop: 6 },
+
   form: {},
-  label: { fontSize: 13, fontWeight: '600', color: '#374151', marginBottom: 6, marginTop: 16 },
+  label: {
+    fontSize: 13, fontWeight: '600', color: '#374151',
+    marginBottom: 8, letterSpacing: 0.1,
+  },
   input: {
-    borderWidth: 1.5,
-    borderColor: INPUT_BORDER,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 13,
-    fontSize: 15,
-    color: TEXT_COLOR,
-    backgroundColor: INPUT_BG,
-    marginBottom: 2,
+    borderWidth: 1.5, borderColor: '#D1D5DB',
+    borderRadius: 12, paddingHorizontal: 15, paddingVertical: 14,
+    fontSize: 15, color: '#111827', backgroundColor: '#F9FAFB',
   },
-  passRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  showBtn: { padding: 12 },
-  showTxt: { fontSize: 18 },
+  inputFocused: {
+    borderColor: '#4F35D2', backgroundColor: '#fff',
+    shadowColor: '#4F35D2', shadowOpacity: 0.12,
+    shadowRadius: 8, shadowOffset: { width: 0, height: 0 }, elevation: 3,
+  },
+  passWrap: { position: 'relative' },
+  passInput: { paddingRight: 52 },
+  eyeBtn: { position: 'absolute', right: 14, top: 0, bottom: 0, justifyContent: 'center' },
+  eyeIcon: { fontSize: 18 },
+
   signInBtn: {
-    backgroundColor: '#6C3CE1', borderRadius: 14, paddingVertical: 16,
-    alignItems: 'center', marginTop: 28,
-    shadowColor: '#6C3CE1', shadowOpacity: 0.3, shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 }, elevation: 8,
+    backgroundColor: '#4F35D2', borderRadius: 14, height: 56,
+    alignItems: 'center', justifyContent: 'center', marginTop: 32,
+    shadowColor: '#4F35D2', shadowOpacity: 0.35,
+    shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 10,
   },
-  signInText: { color: '#fff', fontSize: 17, fontWeight: '700' },
-  registerRow: { flexDirection: 'row', justifyContent: 'center', marginTop: 20 },
-  registerText: { color: '#6B7280', fontSize: 14 },
-  registerLink: { color: '#6C3CE1', fontWeight: '700', fontSize: 14 },
+  signInBtnDisabled: { opacity: 0.7 },
+  signInText: { color: '#fff', fontSize: 17, fontWeight: '700', letterSpacing: 0.2 },
+
+  divider: { flexDirection: 'row', alignItems: 'center', marginVertical: 24 },
+  divLine: { flex: 1, height: 1, backgroundColor: '#E5E7EB' },
+  divText: { marginHorizontal: 16, fontSize: 13, color: '#9CA3AF', fontWeight: '500' },
+
+  registerBtn: {
+    borderWidth: 1.5, borderColor: '#D1D5DB', borderRadius: 14,
+    height: 52, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: '#fff',
+  },
+  registerBtnText: { color: '#374151', fontSize: 15, fontWeight: '600' },
 });

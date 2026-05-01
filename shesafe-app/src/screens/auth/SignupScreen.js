@@ -1,315 +1,251 @@
-// SheSafe — Signup Screen with PIN (double-entry confirmation for personal safety users)
+// SheSafe — Signup Screen v3 (World-Class UI)
 import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity,
-  ScrollView, Animated, Alert, ActivityIndicator, StatusBar
+  Animated, Alert, ActivityIndicator, StatusBar,
+  KeyboardAvoidingView, Platform, SafeAreaView, Image, ScrollView
 } from 'react-native';
 import { register } from '../../services/AuthService';
 
 const ROLE_META = {
-  victim:  { icon: '🛡️', title: 'Personal Safety Account', color: '#6C3CE1' },
-  police:  { icon: '🏛️', title: 'Law Enforcement Account', color: '#1D4ED8' },
-  contact: { icon: '👨‍👩‍👧', title: 'Trusted Guardian Account', color: '#059669' },
+  victim:  { label: 'Personal Safety', color: '#4F35D2', bg: '#EEE9FF' },
+  police:  { label: 'Law Enforcement', color: '#1D4ED8', bg: '#DBEAFE' },
+  contact: { label: 'Trusted Guardian', color: '#059669', bg: '#D1FAE5' },
 };
 
-// ── PIN Input ─────────────────────────────────────────────────────────────────
-function PinInput({ label, value, onChange }) {
-  const boxes = [0, 1, 2, 3];
-  const inputRef = useRef(null);
-  return (
-    <View style={{ marginBottom: 16 }}>
-      <Text style={styles.label}>{label}</Text>
-      <TouchableOpacity onPress={() => inputRef.current?.focus()} style={styles.pinRow}>
-        {boxes.map(i => (
-          <View key={i} style={[styles.pinBox, value.length > i && styles.pinBoxFilled]}>
-            <Text style={styles.pinDot}>{value.length > i ? '●' : ''}</Text>
-          </View>
-        ))}
-      </TouchableOpacity>
-      <TextInput
-        ref={inputRef} value={value}
-        onChangeText={v => onChange(v.replace(/\D/g, '').slice(0, 4))}
-        keyboardType="numeric" maxLength={4} secureTextEntry style={styles.hiddenInput}
-      />
-    </View>
-  );
-}
+export default function SignupScreen({ navigation, route }) {
+  const role = route?.params?.role || 'victim';
+  const meta = ROLE_META[role] || ROLE_META.victim;
 
-// ── Contact Row ───────────────────────────────────────────────────────────────
-function ContactRow({ index, contact, onChange }) {
-  return (
-    <View style={styles.contactRow}>
-      <TextInput
-        style={[styles.input, { flex: 1, marginRight: 8 }]}
-        placeholder={`Contact ${index + 1} Name`}
-        placeholderTextColor="#9CA3AF"
-        value={contact.name}
-        onChangeText={v => onChange({ ...contact, name: v })}
-      />
-      <TextInput
-        style={[styles.input, { flex: 1 }]}
-        placeholder="Phone (+91...)"
-        placeholderTextColor="#9CA3AF"
-        value={contact.phone}
-        onChangeText={v => onChange({ ...contact, phone: v })}
-        keyboardType="phone-pad"
-      />
-    </View>
-  );
-}
-
-// ── Main Screen ───────────────────────────────────────────────────────────────
-export default function SignupScreen({ route, navigation }) {
-  const { role = 'victim', roleColor = '#6C3CE1' } = route.params || {};
-  const meta = ROLE_META[role];
-
-  const [name, setName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [showPass, setShowPass] = useState(false);
-  const [pin, setPin] = useState('');
-  const [pinConfirm, setPinConfirm] = useState('');
-  const [contacts, setContacts] = useState([
-    { name: '', phone: '', relation: '' },
-    { name: '', phone: '', relation: '' },
-  ]);
-  const [badgeNumber, setBadgeNumber] = useState('');
-  const [stationName, setStationName] = useState('');
+  const [name, setName]           = useState('');
+  const [phone, setPhone]         = useState('');
+  const [email, setEmail]         = useState('');
+  const [password, setPassword]   = useState('');
+  const [confirmPass, setConfirmPass] = useState('');
+  const [pin, setPin]             = useState('');
+  const [badgeNumber, setBadge]   = useState('');
+  const [stationName, setStation] = useState('');
   const [victimPhone, setVictimPhone] = useState('');
-  const [relationship, setRelationship] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [step, setStep] = useState(1); // 1=basic info, 2=role-specific, 3=PIN (victim only)
+  const [loading, setLoading]     = useState(false);
+  const [showPass, setShowPass]   = useState(false);
+  const [focusedField, setFocused] = useState(null);
 
-  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const fadeAnim  = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(24)).current;
+
   useEffect(() => {
-    Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }).start();
-  }, [step]);
+    Animated.parallel([
+      Animated.timing(fadeAnim,  { toValue: 1, duration: 450, useNativeDriver: true }),
+      Animated.timing(slideAnim, { toValue: 0, duration: 450, useNativeDriver: true }),
+    ]).start();
+  }, []);
 
-  function validateStep1() {
-    if (!name.trim()) { Alert.alert('Required', 'Please enter your full name'); return false; }
-    if (!phone.trim() || phone.length < 10) { Alert.alert('Required', 'Enter a valid phone number'); return false; }
-    if (!email.trim() || !email.includes('@')) { Alert.alert('Required', 'Enter a valid email address'); return false; }
-    if (password.length < 6) { Alert.alert('Required', 'Password must be at least 6 characters'); return false; }
-    return true;
-  }
-
-  function validatePin() {
-    if (pin.length !== 4) { Alert.alert('PIN Required', 'Please set a 4-digit safety PIN'); return false; }
-    if (pin !== pinConfirm) { Alert.alert('PIN Mismatch', 'The PINs you entered do not match.'); setPinConfirm(''); return false; }
-    return true;
-  }
-
-  function goToStep(n) {
-    Animated.timing(fadeAnim, { toValue: 0, duration: 180, useNativeDriver: true }).start(() => setStep(n));
-  }
+  const inputStyle = (field) => [
+    styles.input,
+    focusedField === field && {
+      borderColor: meta.color,
+      backgroundColor: '#fff',
+      shadowColor: meta.color,
+      shadowOpacity: 0.12,
+      shadowRadius: 8,
+      elevation: 3,
+    },
+  ];
 
   async function handleSignup() {
-    if (role === 'victim' && !validatePin()) return;
+    if (!name.trim() || !phone.trim() || !email.trim() || !password.trim()) {
+      Alert.alert('Missing Fields', 'Please fill in all required fields.'); return;
+    }
+    if (password !== confirmPass) {
+      Alert.alert('Password Mismatch', 'Passwords do not match.'); return;
+    }
+    if (password.length < 6) {
+      Alert.alert('Weak Password', 'Password must be at least 6 characters.'); return;
+    }
+    if (role === 'victim' && (!pin || pin.length !== 4)) {
+      Alert.alert('PIN Required', 'Please set a 4-digit safety PIN.'); return;
+    }
     setLoading(true);
     try {
-      const validContacts = contacts.filter(c => c.name && c.phone);
       await register({
-        name, phone, email, password, role,
-        pin: role === 'victim' ? pin : '',
-        emergencyContacts: validContacts,
-        badgeNumber, stationName, victimPhone, relationship,
+        name: name.trim(), phone: phone.trim(),
+        email: email.trim(), password, role, pin,
+        badgeNumber, stationName, victimPhone,
+        emergencyContacts: [], relationship: '',
       });
       navigation.reset({ index: 0, routes: [{ name: 'Main' }] });
     } catch (err) {
-      Alert.alert('Sign Up Failed', err.message || 'Something went wrong. Please try again.');
+      Alert.alert('Registration Failed', err.message || 'Please try again.');
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <ScrollView style={styles.container} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+    <SafeAreaView style={styles.safe}>
       <StatusBar barStyle="dark-content" backgroundColor="#fff" />
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
 
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Text style={styles.backTxt}>‹ Back</Text>
-        </TouchableOpacity>
-        <View style={[styles.iconBadge, { backgroundColor: meta.color + '18' }]}>
-          <Text style={{ fontSize: 28 }}>{meta.icon}</Text>
-        </View>
-        <Text style={[styles.title, { color: meta.color }]}>{meta.title}</Text>
-        <View style={styles.stepRow}>
-          {[1, 2, role === 'victim' ? 3 : null].filter(Boolean).map(s => (
-            <View key={s} style={[styles.stepDot, step >= s && { backgroundColor: meta.color }]} />
-          ))}
-        </View>
-        <Text style={styles.stepLabel}>Step {step} of {role === 'victim' ? 3 : 2}</Text>
-      </View>
+          {/* Header */}
+          <Animated.View style={[styles.header, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
+            <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+              <Text style={styles.backTxt}>← Back</Text>
+            </TouchableOpacity>
+            <Image source={require('../../../assets/shesafe-logo.png')} style={styles.logo} resizeMode="contain" />
 
-      <Animated.View style={{ opacity: fadeAnim }}>
-        {/* ── Step 1: Basic Info ── */}
-        {step === 1 && (
-          <View style={styles.form}>
-            <Text style={styles.sectionTitle}>Basic Information</Text>
+            {/* Role Badge */}
+            <View style={[styles.roleBadge, { backgroundColor: meta.bg }]}>
+              <Text style={[styles.roleBadgeText, { color: meta.color }]}>Creating {meta.label} account</Text>
+            </View>
+
+            <Text style={styles.title}>Create Account</Text>
+            <Text style={styles.subtitle}>Join SheSafe to stay protected</Text>
+          </Animated.View>
+
+          {/* Form */}
+          <Animated.View style={{ opacity: fadeAnim }}>
+
+            {/* Section: Basic Info */}
+            <Text style={styles.sectionHeader}>BASIC INFORMATION</Text>
 
             <Text style={styles.label}>Full Name</Text>
-            <TextInput style={styles.input} placeholder="e.g. Priya Sharma"
-              placeholderTextColor="#9CA3AF" value={name} onChangeText={setName} />
+            <TextInput style={inputStyle('name')} placeholder="Your full name" placeholderTextColor="#9CA3AF"
+              value={name} onChangeText={setName} autoCapitalize="words"
+              onFocus={() => setFocused('name')} onBlur={() => setFocused(null)} />
 
-            <Text style={styles.label}>Phone Number</Text>
-            <TextInput style={styles.input} placeholder="+91 98765 43210"
-              placeholderTextColor="#9CA3AF" value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
+            <Text style={[styles.label, styles.mt16]}>Phone Number</Text>
+            <TextInput style={inputStyle('phone')} placeholder="+91 98765 43210" placeholderTextColor="#9CA3AF"
+              value={phone} onChangeText={setPhone} keyboardType="phone-pad"
+              onFocus={() => setFocused('phone')} onBlur={() => setFocused(null)} />
 
-            <Text style={styles.label}>Email Address</Text>
-            <TextInput style={styles.input} placeholder="you@example.com"
-              placeholderTextColor="#9CA3AF" value={email} onChangeText={setEmail}
-              keyboardType="email-address" autoCapitalize="none" />
+            <Text style={[styles.label, styles.mt16]}>Email Address</Text>
+            <TextInput style={inputStyle('email')} placeholder="you@example.com" placeholderTextColor="#9CA3AF"
+              value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none"
+              onFocus={() => setFocused('email')} onBlur={() => setFocused(null)} />
+
+            {/* Section: Security */}
+            <Text style={[styles.sectionHeader, styles.mt24]}>SECURITY</Text>
 
             <Text style={styles.label}>Password</Text>
-            <View style={styles.passRow}>
-              <TextInput
-                style={[styles.input, { flex: 1, marginBottom: 0 }]}
-                placeholder="Minimum 6 characters"
-                placeholderTextColor="#9CA3AF"
-                value={password} onChangeText={setPassword}
-                secureTextEntry={!showPass}
-              />
-              <TouchableOpacity onPress={() => setShowPass(!showPass)} style={styles.eyeBtn}>
+            <View style={styles.passWrap}>
+              <TextInput style={[inputStyle('pass'), styles.passInput]} placeholder="Min. 6 characters" placeholderTextColor="#9CA3AF"
+                value={password} onChangeText={setPassword} secureTextEntry={!showPass}
+                onFocus={() => setFocused('pass')} onBlur={() => setFocused(null)} />
+              <TouchableOpacity style={styles.eyeBtn} onPress={() => setShowPass(!showPass)}>
                 <Text style={styles.eyeIcon}>{showPass ? '🙈' : '👁️'}</Text>
               </TouchableOpacity>
             </View>
 
-            <TouchableOpacity
-              style={[styles.btn, { backgroundColor: meta.color }]}
-              onPress={() => { if (validateStep1()) goToStep(2); }}
-            >
-              <Text style={styles.btnText}>Continue →</Text>
-            </TouchableOpacity>
-          </View>
-        )}
+            <Text style={[styles.label, styles.mt16]}>Confirm Password</Text>
+            <TextInput style={inputStyle('confirm')} placeholder="Repeat password" placeholderTextColor="#9CA3AF"
+              value={confirmPass} onChangeText={setConfirmPass} secureTextEntry={!showPass}
+              onFocus={() => setFocused('confirm')} onBlur={() => setFocused(null)} />
 
-        {/* ── Step 2: Role-Specific ── */}
-        {step === 2 && (
-          <View style={styles.form}>
+            {/* Safety PIN (victim only) */}
             {role === 'victim' && (
               <>
-                <Text style={styles.sectionTitle}>Emergency Contacts</Text>
-                <Text style={styles.hint}>Who should be alerted if you're in danger?</Text>
-                {contacts.map((c, i) => (
-                  <ContactRow key={i} index={i} contact={c}
-                    onChange={v => { const arr = [...contacts]; arr[i] = v; setContacts(arr); }}
-                  />
-                ))}
+                <Text style={[styles.label, styles.mt16]}>4-Digit Safety PIN</Text>
+                <Text style={styles.hint}>Used to cancel false alarms. Keep it secret.</Text>
+                <TextInput style={inputStyle('pin')} placeholder="e.g. 1234" placeholderTextColor="#9CA3AF"
+                  value={pin} onChangeText={(v) => setPin(v.slice(0, 4))} keyboardType="number-pad" maxLength={4}
+                  onFocus={() => setFocused('pin')} onBlur={() => setFocused(null)} />
               </>
             )}
+
+            {/* Police fields */}
             {role === 'police' && (
               <>
-                <Text style={styles.sectionTitle}>Officer Details</Text>
-                <Text style={styles.label}>Badge Number</Text>
-                <TextInput style={styles.input} placeholder="e.g. KA-1234"
-                  placeholderTextColor="#9CA3AF" value={badgeNumber} onChangeText={setBadgeNumber} />
-                <Text style={styles.label}>Police Station</Text>
-                <TextInput style={styles.input} placeholder="e.g. Koramangala Police Station"
-                  placeholderTextColor="#9CA3AF" value={stationName} onChangeText={setStationName} />
+                <Text style={[styles.sectionHeader, styles.mt24]}>OFFICER DETAILS</Text>
+                <Text style={styles.label}>Badge / Officer ID</Text>
+                <TextInput style={inputStyle('badge')} placeholder="e.g. KA-MG-01" placeholderTextColor="#9CA3AF"
+                  value={badgeNumber} onChangeText={setBadge}
+                  onFocus={() => setFocused('badge')} onBlur={() => setFocused(null)} />
+                <Text style={[styles.label, styles.mt16]}>Station Name</Text>
+                <TextInput style={inputStyle('station')} placeholder="e.g. MG Road Police Station" placeholderTextColor="#9CA3AF"
+                  value={stationName} onChangeText={setStation}
+                  onFocus={() => setFocused('station')} onBlur={() => setFocused(null)} />
               </>
             )}
+
+            {/* Contact fields */}
             {role === 'contact' && (
               <>
-                <Text style={styles.sectionTitle}>Link to Your Person</Text>
-                <Text style={styles.hint}>Enter the phone number of the person you want to protect.</Text>
-                <Text style={styles.label}>Their Phone Number</Text>
-                <TextInput style={styles.input} placeholder="+91 98765 43210"
-                  placeholderTextColor="#9CA3AF" value={victimPhone} onChangeText={setVictimPhone} keyboardType="phone-pad" />
-                <Text style={styles.label}>Your Relationship</Text>
-                <TextInput style={styles.input} placeholder="e.g. Mother, Brother, Friend"
-                  placeholderTextColor="#9CA3AF" value={relationship} onChangeText={setRelationship} />
+                <Text style={[styles.sectionHeader, styles.mt24]}>LINKED PERSON</Text>
+                <Text style={styles.label}>Person to Protect (Phone)</Text>
+                <Text style={styles.hint}>Phone number of the SheSafe user you're linked to.</Text>
+                <TextInput style={inputStyle('victim')} placeholder="+91 98765 43210" placeholderTextColor="#9CA3AF"
+                  value={victimPhone} onChangeText={setVictimPhone} keyboardType="phone-pad"
+                  onFocus={() => setFocused('victim')} onBlur={() => setFocused(null)} />
               </>
             )}
-            <View style={styles.btnRow}>
-              <TouchableOpacity style={[styles.outlineBtn, { borderColor: meta.color }]} onPress={() => goToStep(1)}>
-                <Text style={[styles.outlineBtnText, { color: meta.color }]}>‹ Back</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.btn, { backgroundColor: meta.color, flex: 1 }]}
-                onPress={() => { if (role === 'victim') goToStep(3); else handleSignup(); }}
-              >
-                {loading
-                  ? <ActivityIndicator color="#fff" />
-                  : <Text style={styles.btnText}>{role === 'victim' ? 'Set PIN →' : 'Create Account'}</Text>
-                }
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
 
-        {/* ── Step 3: PIN (victim only) ── */}
-        {step === 3 && role === 'victim' && (
-          <View style={styles.form}>
-            <Text style={styles.sectionTitle}>Set Your Safety PIN</Text>
-            <Text style={styles.hint}>
-              This 4-digit PIN cancels a false emergency alert during the 45-second countdown.
-              Keep it private and memorable.
-            </Text>
-            <PinInput label="Enter PIN" value={pin} onChange={setPin} />
-            <PinInput label="Confirm PIN" value={pinConfirm} onChange={setPinConfirm} />
-            <View style={[styles.pinHint, { borderColor: meta.color + '40', backgroundColor: meta.color + '08' }]}>
-              <Text style={[styles.pinHintText, { color: meta.color }]}>
-                ⚠️ You'll use this PIN to cancel a 45-second emergency countdown. Don't forget it.
-              </Text>
-            </View>
-            <View style={styles.btnRow}>
-              <TouchableOpacity style={[styles.outlineBtn, { borderColor: meta.color }]} onPress={() => goToStep(2)}>
-                <Text style={[styles.outlineBtnText, { color: meta.color }]}>‹ Back</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.btn, { backgroundColor: meta.color, flex: 1 }]}
-                onPress={handleSignup} disabled={loading}
-              >
-                {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnText}>Create Account ✓</Text>}
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
-      </Animated.View>
-    </ScrollView>
+            {/* CTA */}
+            <TouchableOpacity
+              style={[styles.ctaBtn, { backgroundColor: meta.color, shadowColor: meta.color }, loading && styles.ctaDisabled]}
+              onPress={handleSignup}
+              disabled={loading}
+              activeOpacity={0.88}
+            >
+              {loading
+                ? <ActivityIndicator color="#fff" size="small" />
+                : <Text style={styles.ctaText}>Create Account →</Text>
+              }
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.signinRow} onPress={() => navigation.navigate('Login')}>
+              <Text style={styles.signinText}>Already registered? </Text>
+              <Text style={[styles.signinLink, { color: meta.color }]}>Sign in</Text>
+            </TouchableOpacity>
+
+          </Animated.View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
-const INPUT_BG = '#F3F4F6';
-const INPUT_BORDER = '#D1D5DB';
-const TEXT_COLOR = '#111827';
-
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
-  header: { paddingTop: 52, paddingHorizontal: 24, paddingBottom: 20, alignItems: 'center' },
-  backBtn: { alignSelf: 'flex-start', marginBottom: 14 },
-  backTxt: { fontSize: 16, color: '#6C3CE1', fontWeight: '600' },
-  iconBadge: { width: 64, height: 64, borderRadius: 18, alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
-  title: { fontSize: 22, fontWeight: '800', textAlign: 'center' },
-  stepRow: { flexDirection: 'row', gap: 6, marginTop: 14 },
-  stepDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#E5E7EB' },
-  stepLabel: { fontSize: 12, color: '#9CA3AF', marginTop: 6 },
-  form: { paddingHorizontal: 24, paddingBottom: 48 },
-  sectionTitle: { fontSize: 17, fontWeight: '700', color: '#111827', marginBottom: 4, marginTop: 4 },
-  hint: { fontSize: 13, color: '#6B7280', marginBottom: 18, lineHeight: 18 },
-  label: { fontSize: 13, fontWeight: '600', color: '#374151', marginBottom: 6, marginTop: 14 },
-  input: {
-    borderWidth: 1.5, borderColor: INPUT_BORDER, borderRadius: 12,
-    paddingHorizontal: 14, paddingVertical: 13, fontSize: 15,
-    color: TEXT_COLOR, backgroundColor: INPUT_BG, marginBottom: 2,
+  safe: { flex: 1, backgroundColor: '#fff' },
+  scroll: { paddingHorizontal: 24, paddingTop: 20, paddingBottom: 48 },
+
+  header: { alignItems: 'center', marginBottom: 32 },
+  backBtn: { alignSelf: 'flex-start', marginBottom: 24 },
+  backTxt: { fontSize: 15, color: '#4F35D2', fontWeight: '600' },
+  logo: { width: 190, height: 52, marginBottom: 18 },
+  roleBadge: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 999, marginBottom: 16 },
+  roleBadgeText: { fontSize: 12, fontWeight: '700', letterSpacing: 0.3 },
+  title: { fontSize: 26, fontWeight: '800', color: '#111827', letterSpacing: -0.5 },
+  subtitle: { fontSize: 14, color: '#6B7280', marginTop: 6 },
+
+  sectionHeader: {
+    fontSize: 11, fontWeight: '700', color: '#9CA3AF',
+    letterSpacing: 2, marginBottom: 14, marginTop: 8,
   },
-  passRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  eyeBtn: { padding: 12 },
+  label: { fontSize: 13, fontWeight: '600', color: '#374151', marginBottom: 8, letterSpacing: 0.1 },
+  hint: { fontSize: 12, color: '#9CA3AF', marginBottom: 8, lineHeight: 17 },
+  mt16: { marginTop: 16 },
+  mt24: { marginTop: 24 },
+
+  input: {
+    borderWidth: 1.5, borderColor: '#D1D5DB',
+    borderRadius: 12, paddingHorizontal: 15, paddingVertical: 14,
+    fontSize: 15, color: '#111827', backgroundColor: '#F9FAFB',
+  },
+  passWrap: { position: 'relative' },
+  passInput: { paddingRight: 52 },
+  eyeBtn: { position: 'absolute', right: 14, top: 0, bottom: 0, justifyContent: 'center' },
   eyeIcon: { fontSize: 18 },
-  btn: { borderRadius: 14, paddingVertical: 15, alignItems: 'center', marginTop: 24 },
-  btnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
-  outlineBtn: { borderWidth: 1.5, borderRadius: 14, paddingVertical: 15, paddingHorizontal: 20, alignItems: 'center' },
-  outlineBtnText: { fontSize: 15, fontWeight: '600' },
-  btnRow: { flexDirection: 'row', gap: 12, marginTop: 16 },
-  contactRow: { flexDirection: 'row', marginBottom: 10 },
-  pinRow: { flexDirection: 'row', gap: 14, justifyContent: 'center', marginVertical: 12 },
-  pinBox: { width: 60, height: 68, borderRadius: 14, borderWidth: 2, borderColor: '#E5E7EB', alignItems: 'center', justifyContent: 'center', backgroundColor: INPUT_BG },
-  pinBoxFilled: { borderColor: '#6C3CE1', backgroundColor: '#EDE9FE' },
-  pinDot: { fontSize: 24, color: '#6C3CE1' },
-  hiddenInput: { height: 0, width: 0, opacity: 0 },
-  pinHint: { borderWidth: 1, borderRadius: 12, padding: 14, marginTop: 16 },
-  pinHintText: { fontSize: 13, lineHeight: 18 },
+
+  ctaBtn: {
+    borderRadius: 14, height: 56,
+    alignItems: 'center', justifyContent: 'center', marginTop: 32,
+    shadowOpacity: 0.3, shadowRadius: 14, shadowOffset: { width: 0, height: 7 }, elevation: 8,
+  },
+  ctaDisabled: { opacity: 0.7 },
+  ctaText: { color: '#fff', fontSize: 17, fontWeight: '700', letterSpacing: 0.2 },
+
+  signinRow: { flexDirection: 'row', justifyContent: 'center', marginTop: 20 },
+  signinText: { color: '#6B7280', fontSize: 14 },
+  signinLink: { fontWeight: '700', fontSize: 14 },
 });
