@@ -12,6 +12,10 @@ from core.database import init_db
 from api.police import router as police_router
 from api.risk import router as risk_router
 from api.alerts import router as alerts_router, init_firebase
+from api.auth import router as auth_router
+
+# Global Firebase db reference (set by init_firebase, used by auth module)
+db = None
 
 
 @asynccontextmanager
@@ -24,7 +28,8 @@ async def lifespan(app: FastAPI):
     print(f"[{settings.APP_NAME}] Police station database ready.")
 
     # Initialize Firebase (if credentials exist)
-    init_firebase()
+    global db
+    db = init_firebase()
 
     # Check Twilio
     if settings.is_twilio_configured():
@@ -58,6 +63,7 @@ app.add_middleware(
 )
 
 # ── Mount routers ──
+app.include_router(auth_router)
 app.include_router(police_router)
 app.include_router(risk_router)
 app.include_router(alerts_router)

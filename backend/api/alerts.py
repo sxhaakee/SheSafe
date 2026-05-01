@@ -51,20 +51,23 @@ _firebase_initialized = False
 
 
 def init_firebase():
-    """Initialize Firebase Admin SDK if credentials are available."""
+    """Initialize Firebase Admin SDK if credentials are available. Returns db client."""
     global _firebase_initialized
     if not _firebase_initialized and settings.is_firebase_configured():
         try:
             import firebase_admin
-            from firebase_admin import credentials
+            from firebase_admin import credentials, firestore
             cred = credentials.Certificate(settings.FIREBASE_CREDENTIALS_PATH)
             firebase_admin.initialize_app(cred, {
                 "storageBucket": settings.FIREBASE_STORAGE_BUCKET,
             })
             _firebase_initialized = True
             print("[SHESAFE] Firebase Admin SDK initialized.")
+            return firestore.client()
         except Exception as e:
             print(f"[SHESAFE] Firebase init failed: {e}")
+    return None
+
 
 
 def save_alert_to_firestore(alert_id: str, alert_data: dict):

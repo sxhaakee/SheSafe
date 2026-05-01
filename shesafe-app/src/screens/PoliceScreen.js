@@ -1,279 +1,209 @@
-/**
- * SheSafe — POLICE SCREEN
- * Shows incoming alerts, victim location, and alert details.
- * Designed for demo: police officer's view of the system.
- */
+// SheSafe — Police Dashboard Screen
 import React, { useState, useEffect, useRef } from 'react';
-import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  Vibration, Linking, StatusBar, RefreshControl,
-} from 'react-native';
-import { apiService } from '../services/ApiService';
-import config from '../config';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Linking, RefreshControl, StatusBar, Animated } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { getStoredUser } from '../services/AuthService';
+import ApiService from '../services/ApiService';
 
-export default function PoliceScreen() {
-  const [alerts, setAlerts] = useState([]);
-  const [connected, setConnected] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
-  const [selectedAlert, setSelectedAlert] = useState(null);
-  const pollingRef = useRef(null);
-  const knownAlerts = useRef(new Set());
+const POLL_MS = 8000;
 
-  // Poll for new alerts (simulated via alert status check)
-  useEffect(() => {
-    checkConnection();
-    // Poll every 5 seconds
-    pollingRef.current = setInterval(checkConnection, 5000);
-    return () => clearInterval(pollingRef.current);
-  }, []);
+function RiskBadge({ score }) {
+  const color = score >= 80 ? '#FF4757' : score >= 60 ? '#FF6B35' : score >= 40 ? '#FFAB00' : '#2ED573';
+  const label = score >= 80 ? 'CRITICAL' : score >= 60 ? 'HIGH' : score >= 40 ? 'MED' : 'LOW';
+  return <View style={[styles.riskBadge, { backgroundColor: color + '20' }]}><Text style={[styles.riskBadgeText, { color }]}>{label}</Text></View>;
+}
 
-  const checkConnection = async () => {
-    const result = await apiService.ping();
-    setConnected(!!result);
-    if (result?.active_alerts) {
-      const newAlerts = [];
-      for (const id of result.active_alerts) {
-        if (!knownAlerts.current.has(id)) {
-          knownAlerts.current.add(id);
-          const status = await apiService.getAlertStatus(id);
-          if (status) {
-            newAlerts.push({
-              id,
-              ...status,
-              receivedAt: new Date().toLocaleTimeString('en-IN', { hour12: true }),
-            });
-            Vibration.vibrate([0, 500, 200, 500, 200, 500]);
-          }
-        }
-      }
-      if (newAlerts.length > 0) {
-        setAlerts(prev => [...newAlerts, ...prev]);
-      }
-    }
-  };
+function AlertCard({ alert, onRespond }) {
+  const scaleAnim = useRef(new Animated.Value(0.95)).current;
+  useEffect(() => { Animated.spring(scaleAnim, { toValue: 1, tension: 80, friction: 8, useNativeDriver: true }).start(); }, []);
 
-  // Simulate receiving an alert (for demo)
-  const simulateIncomingAlert = () => {
-    const mockAlert = {
-      id: `SHESAFE_DEMO_${Date.now().toString(16).toUpperCase()}`,
-      user_name: config.DEMO_USER.name,
-      user_phone: config.DEMO_USER.phone,
-      lat: config.DEMO_ZONE.lat,
-      lng: config.DEMO_ZONE.lng,
-      risk_score: 95,
-      risk_level: 'emergency',
-      trigger_type: 'shake',
-      is_safe: false,
-      total_pings: 0,
-      receivedAt: new Date().toLocaleTimeString('en-IN', { hour12: true }),
-      address: config.DEMO_ZONE.name,
-      trusted_contacts: config.TRUSTED_CONTACTS,
-    };
-    setAlerts(prev => [mockAlert, ...prev]);
-    Vibration.vibrate([0, 500, 200, 500, 200, 500]);
-  };
-
-  const openMaps = (lat, lng) => {
-    Linking.openURL(`https://maps.google.com/?q=${lat},${lng}`);
-  };
-
-  const callNumber = (phone) => {
-    Linking.openURL(`tel:${phone}`);
-  };
-
-  const onRefresh = async () => {
-    setRefreshing(true);
-    await checkConnection();
-    setRefreshing(false);
-  };
-
-  const getRiskColor = (score) => {
-    if (score <= 30) return '#22c55e';
-    if (score <= 60) return '#f59e0b';
-    if (score <= 80) return '#f97316';
-    return '#ef4444';
+  const timeSince = (ts) => {
+    const secs = Math.floor((Date.now() - new Date(ts).getTime()) / 1000);
+    if (secs < 60) return `${secs}s ago`;
+    if (secs < 3600) return `${Math.floor(secs / 60)}m ago`;
+    return `${Math.floor(secs / 3600)}h ago`;
   };
 
   return (
+    <Animated.View style={[styles.alertCard, alert.is_safe && styles.alertCardSafe, { transform: [{ scale: scaleAnim }] }]}>
+      <View style={styles.alertTop}>
+        <View style={{ flex: 1 }}>
+          <View style={styles.alertNameRow}>
+            <Text style={styles.alertName}>{alert.user_name}</Text>
+            <RiskBadge score={alert.risk_score} />
+          </View>
+          <Text style={styles.alertPhone}>{alert.user_phone}</Text>
+        </View>
+        {alert.is_safe && <View style={styles.safePill}><Text style={styles.safePillText}>✓ Safe</Text></View>}
+      </View>
+
+      <View style={styles.alertMeta}>
+        <Text style={styles.alertAddr} numberOfLines={1}>📍 {alert.address || `${alert.lat?.toFixed(4)}, ${alert.lng?.toFixed(4)}`}</Text>
+        <Text style={styles.alertTime}>🕐 {timeSince(alert.timestamp)} • {alert.trigger_type?.toUpperCase()}</Text>
+        {alert.total_pings > 0 && <Text style={styles.alertPings}>📡 {alert.total_pings} location updates</Text>}
+      </View>
+
+      {!alert.is_safe && (
+        <View style={styles.alertActions}>
+          <TouchableOpacity style={styles.callBtn} onPress={() => Linking.openURL(`tel:${alert.user_phone}`)}>
+            <Text style={styles.callBtnText}>📞 Call</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.mapBtn} onPress={() => Linking.openURL(alert.maps_link || `https://maps.google.com/?q=${alert.lat},${alert.lng}`)}>
+            <Text style={styles.mapBtnText}>🗺️ Navigate</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.respondBtn} onPress={() => onRespond(alert)}>
+            <Text style={styles.respondBtnText}>✓ Responding</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+    </Animated.View>
+  );
+}
+
+export default function PoliceScreen() {
+  const [user, setUser] = useState(null);
+  const [alerts, setAlerts] = useState([]);
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastUpdate, setLastUpdate] = useState(null);
+  const pollRef = useRef(null);
+
+  useEffect(() => {
+    getStoredUser().then(setUser);
+    fetchAlerts();
+    pollRef.current = setInterval(fetchAlerts, POLL_MS);
+    return () => clearInterval(pollRef.current);
+  }, []);
+
+  async function fetchAlerts() {
+    try {
+      const data = await ApiService.ping();
+      if (data.active_alerts?.length > 0) {
+        const details = await Promise.all(
+          data.active_alerts.map(id => ApiService.getAlertStatus(id).catch(() => null))
+        );
+        setAlerts(details.filter(Boolean).sort((a, b) => b.risk_score - a.risk_score));
+      } else {
+        setAlerts([]);
+      }
+      setLastUpdate(new Date());
+    } catch {}
+  }
+
+  async function onRefresh() {
+    setRefreshing(true);
+    await fetchAlerts();
+    setRefreshing(false);
+  }
+
+  function simulateAlert() {
+    setAlerts([{
+      alert_id: 'DEMO_001',
+      user_name: 'Priya Sharma',
+      user_phone: '+919876543210',
+      lat: 12.9340, lng: 77.6210,
+      address: 'Near Vemana College of Engineering, Koramangala, Bengaluru',
+      risk_score: 87, risk_level: 'high',
+      trigger_type: 'shake_trigger',
+      timestamp: new Date().toISOString(),
+      maps_link: 'https://maps.google.com/?q=12.9340,77.6210',
+      is_safe: false, total_pings: 3,
+    }]);
+  }
+
+  const activeAlerts = alerts.filter(a => !a.is_safe);
+  const resolvedAlerts = alerts.filter(a => a.is_safe);
+
+  return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#1e3a5f" />
+      <StatusBar barStyle="dark-content" backgroundColor="#fff" />
+      <LinearGradient colors={['#EFF6FF', '#FFFFFF']} style={StyleSheet.absoluteFillObject} />
 
       {/* Header */}
       <View style={styles.header}>
         <View>
-          <Text style={styles.headerTitle}>🏛️ Police Dashboard</Text>
-          <Text style={styles.headerSub}>SheSafe Alert Receiver</Text>
+          <Text style={styles.title}>🏛️ Police Dashboard</Text>
+          <Text style={styles.subtitle}>{user?.station_name || 'Alert Monitor'}</Text>
         </View>
-        <View style={[styles.connBadge, { backgroundColor: connected ? '#22c55e' : '#ef4444' }]}>
-          <Text style={styles.connText}>{connected ? 'LIVE' : 'OFFLINE'}</Text>
+        <View style={styles.headerRight}>
+          <View style={[styles.dot, { backgroundColor: activeAlerts.length > 0 ? '#FF4757' : '#2ED573' }]} />
+          <Text style={styles.dotLabel}>{activeAlerts.length > 0 ? 'ACTIVE' : 'CLEAR'}</Text>
         </View>
       </View>
 
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-      >
-        {/* Stats Bar */}
-        <View style={styles.statsBar}>
-          <View style={styles.statItem}>
-            <Text style={styles.statNumber}>{alerts.length}</Text>
-            <Text style={styles.statLabel}>Total Alerts</Text>
-          </View>
-          <View style={styles.statItem}>
-            <Text style={[styles.statNumber, { color: '#ef4444' }]}>
-              {alerts.filter(a => !a.is_safe).length}
-            </Text>
-            <Text style={styles.statLabel}>Active</Text>
-          </View>
-          <View style={styles.statItem}>
-            <Text style={[styles.statNumber, { color: '#22c55e' }]}>
-              {alerts.filter(a => a.is_safe).length}
-            </Text>
-            <Text style={styles.statLabel}>Resolved</Text>
-          </View>
+      {/* Stats bar */}
+      <View style={styles.statsRow}>
+        <View style={[styles.statCard, { backgroundColor: '#FFE4E4' }]}>
+          <Text style={[styles.statNum, { color: '#FF4757' }]}>{activeAlerts.length}</Text>
+          <Text style={styles.statLabel}>Active</Text>
         </View>
+        <View style={[styles.statCard, { backgroundColor: '#D1FAE5' }]}>
+          <Text style={[styles.statNum, { color: '#059669' }]}>{resolvedAlerts.length}</Text>
+          <Text style={styles.statLabel}>Resolved</Text>
+        </View>
+        <View style={[styles.statCard, { backgroundColor: '#DBEAFE' }]}>
+          <Text style={[styles.statNum, { color: '#1D4ED8' }]}>{lastUpdate ? lastUpdate.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '--'}</Text>
+          <Text style={styles.statLabel}>Updated</Text>
+        </View>
+      </View>
 
-        {/* Simulate Alert Button (for demo) */}
-        <TouchableOpacity style={styles.simBtn} onPress={simulateIncomingAlert}>
-          <Text style={styles.simBtnText}>🔔 Simulate Incoming Alert (Demo)</Text>
-        </TouchableOpacity>
-
-        {/* Alert List */}
-        {alerts.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyIcon}>🏛️</Text>
-            <Text style={styles.emptyTitle}>No Active Alerts</Text>
-            <Text style={styles.emptyDesc}>
-              Alerts will appear here when a victim triggers SOS or when the risk score exceeds 80.
-            </Text>
-          </View>
-        ) : (
-          alerts.map((alert, i) => (
-            <TouchableOpacity
-              key={i}
-              style={[styles.alertCard, alert.is_safe && styles.alertResolved]}
-              onPress={() => setSelectedAlert(selectedAlert === i ? null : i)}
-            >
-              {/* Alert Header */}
-              <View style={styles.alertHeader}>
-                <View style={[styles.riskBadge, { backgroundColor: getRiskColor(alert.risk_score || 95) }]}>
-                  <Text style={styles.riskBadgeText}>{alert.risk_score || 95}</Text>
-                </View>
-                <View style={{ flex: 1, marginLeft: 12 }}>
-                  <Text style={styles.alertName}>
-                    {alert.is_safe ? '✅ ' : '🚨 '}{alert.user_name || 'Priya Sharma'}
-                  </Text>
-                  <Text style={styles.alertTime}>
-                    {alert.receivedAt} • {(alert.trigger_type || 'shake').toUpperCase()}
-                  </Text>
-                </View>
-                <Text style={[styles.alertStatus, { color: alert.is_safe ? '#22c55e' : '#ef4444' }]}>
-                  {alert.is_safe ? 'SAFE' : 'ACTIVE'}
-                </Text>
-              </View>
-
-              {/* Alert Details (expanded) */}
-              {selectedAlert === i && (
-                <View style={styles.alertDetails}>
-                  <Text style={styles.detailLabel}>📍 Location</Text>
-                  <Text style={styles.detailValue}>
-                    {alert.address || `${(alert.lat || config.DEMO_ZONE.lat).toFixed(4)}°N, ${(alert.lng || config.DEMO_ZONE.lng).toFixed(4)}°E`}
-                  </Text>
-
-                  <Text style={styles.detailLabel}>📞 Victim Phone</Text>
-                  <Text style={styles.detailValue}>{alert.user_phone || config.DEMO_USER.phone}</Text>
-
-                  <Text style={styles.detailLabel}>📡 Location Pings</Text>
-                  <Text style={styles.detailValue}>{alert.total_pings || 0} updates received</Text>
-
-                  <View style={styles.actionBtns}>
-                    <TouchableOpacity
-                      style={styles.mapBtn}
-                      onPress={() => openMaps(alert.lat || config.DEMO_ZONE.lat, alert.lng || config.DEMO_ZONE.lng)}
-                    >
-                      <Text style={styles.mapBtnText}>🗺️ Open Maps</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.callBtn}
-                      onPress={() => callNumber(alert.user_phone || config.DEMO_USER.phone)}
-                    >
-                      <Text style={styles.callBtnText}>📞 Call Victim</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              )}
+      <FlatList
+        data={alerts}
+        keyExtractor={a => a.alert_id}
+        renderItem={({ item }) => <AlertCard alert={item} onRespond={() => {}} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#1D4ED8" />}
+        ListEmptyComponent={
+          <View style={styles.empty}>
+            <Text style={styles.emptyIcon}>🛡️</Text>
+            <Text style={styles.emptyTitle}>All Clear</Text>
+            <Text style={styles.emptyText}>No active alerts. Monitoring in progress.</Text>
+            <TouchableOpacity style={styles.demoBtn} onPress={simulateAlert}>
+              <Text style={styles.demoBtnText}>▶ Simulate Incoming Alert</Text>
             </TouchableOpacity>
-          ))
-        )}
-      </ScrollView>
+          </View>
+        }
+        contentContainerStyle={{ padding: 16, flexGrow: 1 }}
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0a1929' },
-  header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingTop: 50, paddingBottom: 15, paddingHorizontal: 20,
-    backgroundColor: '#1e3a5f',
-  },
-  headerTitle: { color: '#fff', fontSize: 20, fontWeight: '800' },
-  headerSub: { color: '#93c5fd', fontSize: 12, marginTop: 2 },
-  connBadge: {
-    paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12,
-  },
-  connText: { color: '#fff', fontSize: 11, fontWeight: '800' },
-
-  scroll: { flex: 1 },
-  scrollContent: { padding: 16, paddingBottom: 40 },
-
-  statsBar: {
-    flexDirection: 'row', justifyContent: 'space-around',
-    backgroundColor: '#132f4c', borderRadius: 16, padding: 20, marginBottom: 16,
-  },
-  statItem: { alignItems: 'center' },
-  statNumber: { color: '#fff', fontSize: 28, fontWeight: '900' },
-  statLabel: { color: '#64b5f6', fontSize: 11, fontWeight: '600', marginTop: 4 },
-
-  simBtn: {
-    backgroundColor: '#1e3a5f', padding: 14, borderRadius: 12, marginBottom: 16,
-    alignItems: 'center', borderWidth: 1, borderColor: '#2563eb', borderStyle: 'dashed',
-  },
-  simBtnText: { color: '#60a5fa', fontSize: 14, fontWeight: '700' },
-
-  emptyState: { alignItems: 'center', paddingVertical: 60 },
-  emptyIcon: { fontSize: 48, marginBottom: 16 },
-  emptyTitle: { color: '#fff', fontSize: 20, fontWeight: '800' },
-  emptyDesc: { color: '#64b5f6', fontSize: 14, textAlign: 'center', marginTop: 8, paddingHorizontal: 40 },
-
-  alertCard: {
-    backgroundColor: '#132f4c', borderRadius: 16, padding: 16, marginBottom: 12,
-    borderLeftWidth: 4, borderLeftColor: '#ef4444',
-  },
-  alertResolved: { borderLeftColor: '#22c55e', opacity: 0.7 },
-  alertHeader: { flexDirection: 'row', alignItems: 'center' },
-  riskBadge: {
-    width: 48, height: 48, borderRadius: 24, justifyContent: 'center', alignItems: 'center',
-  },
-  riskBadgeText: { color: '#fff', fontSize: 18, fontWeight: '900' },
-  alertName: { color: '#fff', fontSize: 16, fontWeight: '700' },
-  alertTime: { color: '#64b5f6', fontSize: 12, marginTop: 2 },
-  alertStatus: { fontSize: 12, fontWeight: '800' },
-
-  alertDetails: {
-    marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: '#1e3a5f',
-  },
-  detailLabel: { color: '#64b5f6', fontSize: 12, fontWeight: '700', marginTop: 8 },
-  detailValue: { color: '#fff', fontSize: 14, marginTop: 2 },
-
-  actionBtns: { flexDirection: 'row', gap: 12, marginTop: 16 },
-  mapBtn: {
-    flex: 1, backgroundColor: '#2563eb', padding: 14, borderRadius: 12, alignItems: 'center',
-  },
-  mapBtnText: { color: '#fff', fontSize: 14, fontWeight: '700' },
-  callBtn: {
-    flex: 1, backgroundColor: '#16a34a', padding: 14, borderRadius: 12, alignItems: 'center',
-  },
-  callBtnText: { color: '#fff', fontSize: 14, fontWeight: '700' },
+  container: { flex: 1, backgroundColor: '#fff' },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 56, paddingHorizontal: 24, paddingBottom: 16 },
+  title: { fontSize: 22, fontWeight: '800', color: '#1A1A2E' },
+  subtitle: { fontSize: 13, color: '#6B7280', marginTop: 2 },
+  headerRight: { alignItems: 'center' },
+  dot: { width: 12, height: 12, borderRadius: 6 },
+  dotLabel: { fontSize: 9, fontWeight: '700', color: '#6B7280', marginTop: 2 },
+  statsRow: { flexDirection: 'row', paddingHorizontal: 16, gap: 10, marginBottom: 8 },
+  statCard: { flex: 1, borderRadius: 14, padding: 12, alignItems: 'center' },
+  statNum: { fontSize: 22, fontWeight: '900' },
+  statLabel: { fontSize: 11, color: '#6B7280', marginTop: 2 },
+  alertCard: { backgroundColor: '#fff', borderRadius: 18, padding: 18, marginBottom: 12, borderWidth: 1.5, borderColor: '#E8E0FF', shadowColor: '#1D4ED8', shadowOpacity: 0.06, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 3 },
+  alertCardSafe: { borderColor: '#BBF7D0', opacity: 0.7 },
+  alertTop: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 10 },
+  alertNameRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  alertName: { fontSize: 16, fontWeight: '700', color: '#1A1A2E' },
+  alertPhone: { fontSize: 13, color: '#6B7280', marginTop: 2 },
+  safePill: { backgroundColor: '#D1FAE5', borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4 },
+  safePillText: { color: '#059669', fontSize: 12, fontWeight: '700' },
+  riskBadge: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
+  riskBadgeText: { fontSize: 11, fontWeight: '800' },
+  alertMeta: { gap: 4, marginBottom: 14 },
+  alertAddr: { fontSize: 13, color: '#374151' },
+  alertTime: { fontSize: 12, color: '#6B7280' },
+  alertPings: { fontSize: 12, color: '#1D4ED8' },
+  alertActions: { flexDirection: 'row', gap: 8 },
+  callBtn: { flex: 1, backgroundColor: '#EFF6FF', borderRadius: 10, padding: 10, alignItems: 'center' },
+  callBtnText: { color: '#1D4ED8', fontWeight: '600', fontSize: 13 },
+  mapBtn: { flex: 1, backgroundColor: '#F5F3FF', borderRadius: 10, padding: 10, alignItems: 'center' },
+  mapBtnText: { color: '#6C3CE1', fontWeight: '600', fontSize: 13 },
+  respondBtn: { flex: 1, backgroundColor: '#1D4ED8', borderRadius: 10, padding: 10, alignItems: 'center' },
+  respondBtnText: { color: '#fff', fontWeight: '700', fontSize: 13 },
+  empty: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 60 },
+  emptyIcon: { fontSize: 56, marginBottom: 16 },
+  emptyTitle: { fontSize: 22, fontWeight: '800', color: '#1A1A2E' },
+  emptyText: { fontSize: 14, color: '#6B7280', textAlign: 'center', marginTop: 6 },
+  demoBtn: { marginTop: 24, backgroundColor: '#1D4ED8', borderRadius: 14, paddingHorizontal: 24, paddingVertical: 14 },
+  demoBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
 });

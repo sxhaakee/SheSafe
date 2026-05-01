@@ -3,7 +3,7 @@
 // Use your computer's local IP (not localhost) since the phone is a different device
 
 // TO FIND YOUR IP: Open Terminal → type 'ifconfig | grep inet' → use the 192.168.x.x address
-const BACKEND_URL = 'http://192.168.1.100:8000'; // ← CHANGE THIS TO YOUR COMPUTER'S IP
+const BACKEND_URL = 'http://192.0.0.2:8000'; // Your Mac's IP on the hotspot
 
 export default {
   BACKEND_URL,
