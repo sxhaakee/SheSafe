@@ -1,4 +1,4 @@
-// SheSafe — Auth Service v2
+// SheSafe — Auth Service v3
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import ApiService from './ApiService';
 
@@ -19,15 +19,22 @@ export async function register(params) {
     victim_phone: params.victimPhone || '',
     relationship: params.relationship || '',
   });
-  if (!data) throw new Error('Cannot connect to server. Check your internet connection.');
-  if (!data.success) throw new Error(data?.detail || data?.message || 'Registration failed — please try again.');
+
+  if (!data) throw new Error('Cannot reach the server. Check your internet connection and try again.');
+  if (data.error) throw new Error(data.detail || 'Registration failed. Please try again.');
+  if (!data.success) throw new Error(data.detail || data.message || 'Registration failed.');
+
   await _save(data.token, data.user);
   return data;
 }
 
 export async function login(params) {
   const data = await ApiService.login({ phone: params.phone, password: params.password });
-  if (!data || !data.success) throw new Error(data?.detail || 'Login failed — check your credentials');
+
+  if (!data) throw new Error('Cannot reach the server. Check your internet connection.');
+  if (data.error) throw new Error(data.detail || 'Login failed. Check your credentials.');
+  if (!data.success) throw new Error(data.detail || data.message || 'Login failed.');
+
   await _save(data.token, data.user);
   return data;
 }
