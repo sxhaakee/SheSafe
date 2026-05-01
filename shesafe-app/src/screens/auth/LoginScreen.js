@@ -2,7 +2,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity,
-  Animated, Alert, ActivityIndicator, StatusBar, KeyboardAvoidingView, Platform
+  Animated, Alert, ActivityIndicator, StatusBar, KeyboardAvoidingView, Platform, Image
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { login } from '../../services/AuthService';
@@ -49,9 +49,7 @@ export default function LoginScreen({ navigation }) {
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
             <Text style={styles.backTxt}>‹ Back</Text>
           </TouchableOpacity>
-          <View style={styles.logoBox}>
-            <Text style={styles.logoIcon}>🛡️</Text>
-          </View>
+          <Image source={require('../../../assets/shesafe-logo.png')} style={styles.logoImage} resizeMode="contain" />
           <Text style={styles.title}>Welcome back</Text>
           <Text style={styles.subtitle}>Sign in to SheSafe</Text>
         </Animated.View>
@@ -109,8 +107,7 @@ const styles = StyleSheet.create({
   header: { paddingTop: 56, alignItems: 'center', marginBottom: 32 },
   backBtn: { alignSelf: 'flex-start', marginBottom: 24 },
   backTxt: { fontSize: 16, color: '#6C3CE1', fontWeight: '600' },
-  logoBox: { width: 72, height: 72, borderRadius: 20, backgroundColor: '#EDE9FE', alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
-  logoIcon: { fontSize: 36 },
+  logoImage: { width: 180, height: 56, marginBottom: 16 },
   title: { fontSize: 26, fontWeight: '800', color: '#111827' },
   subtitle: { fontSize: 14, color: '#6B7280', marginTop: 4 },
   form: {},

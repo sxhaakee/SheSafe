@@ -1,6 +1,6 @@
 // SheSafe — Welcome / Role Selection Screen
 import React, { useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Animated, Dimensions, StatusBar } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Animated, Dimensions, StatusBar, Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 
 const { width } = Dimensions.get('window');
@@ -53,10 +53,7 @@ export default function WelcomeScreen({ navigation }) {
       <LinearGradient colors={['#F5F3FF', '#FFFFFF']} style={StyleSheet.absoluteFillObject} />
 
       <Animated.View style={[styles.header, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
-        <View style={styles.logoBadge}>
-          <Text style={styles.logoIcon}>🛡️</Text>
-        </View>
-        <Text style={styles.logo}>SheSafe</Text>
+        <Image source={require('../../../assets/shesafe-logo.png')} style={styles.logoImage} resizeMode="contain" />
         <Text style={styles.tagline}>Protection that works when it matters most</Text>
       </Animated.View>
 
@@ -96,9 +93,7 @@ export default function WelcomeScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fff', paddingHorizontal: 24, paddingTop: 56 },
   header: { marginBottom: 28, alignItems: 'center' },
-  logoBadge: { width: 64, height: 64, borderRadius: 20, backgroundColor: '#EDE9FE', alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
-  logoIcon: { fontSize: 32 },
-  logo: { fontSize: 32, fontWeight: '800', color: '#6C3CE1', letterSpacing: -1 },
+  logoImage: { width: 200, height: 60, marginBottom: 8 },
   tagline: { fontSize: 13, color: '#6B7280', marginTop: 6, textAlign: 'center', lineHeight: 18 },
   sectionLabel: { fontSize: 11, fontWeight: '700', color: '#9CA3AF', letterSpacing: 1.5, marginBottom: 14 },
   cards: { gap: 12 },
