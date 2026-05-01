@@ -66,13 +66,17 @@ app.include_router(alerts_router)
 # ── Health check ──
 @app.get("/ping")
 async def ping():
-    """Health check endpoint. Deploy this first, verify it works, then build everything else."""
+    """Health check endpoint. Also returns active alert IDs for mobile app polling."""
+    from api.alerts import active_alerts
+    active = [aid for aid, data in active_alerts.items() if not data.get("is_safe", False)]
     return {
         "status": "alive",
         "app": settings.APP_NAME,
         "version": settings.APP_VERSION,
         "twilio_configured": settings.is_twilio_configured(),
         "firebase_configured": settings.is_firebase_configured(),
+        "active_alerts": active,
+        "total_alerts": len(active_alerts),
     }
 
 
