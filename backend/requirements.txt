@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+twilio
+firebase-admin
+pydantic
+sqlalchemy
+python-multipart
+python-dotenv
+httpx

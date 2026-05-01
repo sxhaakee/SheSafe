@@ -1,0 +1,34 @@
+# Environment files
+.env
+backend/.env
+firebase_service_account.json
+backend/firebase_service_account.json
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+venv/
+.venv/
+
+# SQLite (auto-generated on startup)
+backend/data/police_stations.db
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Node (for dashboard)
+node_modules/
+.next/
