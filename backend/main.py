@@ -9,6 +9,7 @@ from contextlib import asynccontextmanager
 
 from core.config import settings
 from core.database import init_db
+from core.supabase_client import is_configured as supabase_configured
 from api.police import router as police_router
 from api.risk import router as risk_router
 from api.alerts import router as alerts_router, init_firebase
@@ -27,9 +28,14 @@ async def lifespan(app: FastAPI):
     init_db()
     print(f"[{settings.APP_NAME}] Police station database ready.")
 
-    # Initialize Firebase (if credentials exist)
-    global db
-    db = init_firebase()
+    # Initialize Supabase (replaces Firebase)
+    if supabase_configured():
+        print(f"[{settings.APP_NAME}] Supabase connected — persistent storage active.")
+    else:
+        print(f"[{settings.APP_NAME}] Supabase NOT configured — running with in-memory store only.")
+
+    # Also call init_firebase for compatibility (it now connects Supabase internally)
+    init_firebase()
 
     # Check Twilio
     if settings.is_twilio_configured():
@@ -80,7 +86,7 @@ async def ping():
         "app": settings.APP_NAME,
         "version": settings.APP_VERSION,
         "twilio_configured": settings.is_twilio_configured(),
-        "firebase_configured": settings.is_firebase_configured(),
+        "supabase_configured": supabase_configured(),
         "active_alerts": active,
         "total_alerts": len(active_alerts),
     }

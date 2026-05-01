@@ -44,45 +44,38 @@ def get_twilio_client():
     return _twilio_client
 
 
-# ──────────────────────────────────────────────
-# Firebase client (lazy init)
-# ──────────────────────────────────────────────
-_firebase_initialized = False
-
-
 def init_firebase():
-    """Initialize Firebase Admin SDK if credentials are available. Returns db client."""
-    global _firebase_initialized
-    if not _firebase_initialized and settings.is_firebase_configured():
-        try:
-            import firebase_admin
-            from firebase_admin import credentials, firestore
-            cred = credentials.Certificate(settings.FIREBASE_CREDENTIALS_PATH)
-            firebase_admin.initialize_app(cred, {
-                "storageBucket": settings.FIREBASE_STORAGE_BUCKET,
-            })
-            _firebase_initialized = True
-            print("[SHESAFE] Firebase Admin SDK initialized.")
-            return firestore.client()
-        except Exception as e:
-            print(f"[SHESAFE] Firebase init failed: {e}")
+    """Legacy stub — now using Supabase. Kept for startup compatibility."""
+    from core.supabase_client import get_supabase, is_configured
+    if is_configured():
+        db = get_supabase()
+        return db
     return None
 
 
 
-def save_alert_to_firestore(alert_id: str, alert_data: dict):
-    """Save alert event to Firestore (non-blocking)."""
-    if not _firebase_initialized:
-        print(f"[SHESAFE] Firebase not initialized — skipping Firestore save for alert {alert_id}")
-        return
-
+def save_alert_to_supabase(alert_id: str, alert_data: dict):
+    """Save alert to Supabase (non-blocking)."""
+    from core.supabase_client import insert_alert
     try:
-        from firebase_admin import firestore
-        db = firestore.client()
-        db.collection("alerts").document(alert_id).set(alert_data)
-        print(f"[SHESAFE] Alert {alert_id} saved to Firestore.")
+        insert_alert({
+            "alert_id": alert_id,
+            "user_name": alert_data["user_name"],
+            "user_phone": alert_data["user_phone"],
+            "lat": alert_data["lat"],
+            "lng": alert_data["lng"],
+            "address": alert_data.get("address"),
+            "risk_score": alert_data["risk_score"],
+            "risk_level": alert_data["risk_level"],
+            "trigger_type": alert_data["trigger_type"],
+            "timestamp": alert_data["timestamp"],
+            "maps_link": alert_data["maps_link"],
+            "status": alert_data["status"],
+            "is_safe": alert_data["is_safe"],
+        })
+        print(f"[SHESAFE] Alert {alert_id} saved to Supabase.")
     except Exception as e:
-        print(f"[SHESAFE] Firestore save failed for alert {alert_id}: {e}")
+        print(f"[SHESAFE] Supabase alert save failed: {e}")
 
 
 # ──────────────────────────────────────────────
@@ -243,9 +236,9 @@ async def fire_alert(request: AlertFireRequest):
 
     active_alerts[alert_id] = alert_data
 
-    # Save to Firestore in background (non-blocking)
+    # Save to Supabase in background (non-blocking)
     threading.Thread(
-        target=save_alert_to_firestore,
+        target=save_alert_to_supabase,
         args=(alert_id, alert_data),
     ).start()
 
@@ -286,21 +279,12 @@ async def location_ping(request: LocationPingRequest):
     alert["lat"] = request.lat
     alert["lng"] = request.lng
 
-    # Update Firestore in background
-    if _firebase_initialized:
-        def update_firestore():
-            try:
-                from firebase_admin import firestore
-                db = firestore.client()
-                db.collection("alerts").document(request.alert_id).update({
-                    "lat": request.lat,
-                    "lng": request.lng,
-                    "location_pings": firestore.ArrayUnion([ping]),
-                })
-            except Exception as e:
-                print(f"[SHESAFE] Firestore ping update failed: {e}")
-
-        threading.Thread(target=update_firestore).start()
+    # Update Supabase in background
+    from core.supabase_client import update_alert
+    threading.Thread(
+        target=update_alert,
+        args=(request.alert_id, {"lat": request.lat, "lng": request.lng}),
+    ).start()
 
     return LocationPingResponse(
         status="recorded",
@@ -342,20 +326,12 @@ async def confirm_safe(request: ImSafeRequest):
         if "sent" in status:
             notifications_sent += 1
 
-    # Update Firestore
-    if _firebase_initialized:
-        def update_firestore():
-            try:
-                from firebase_admin import firestore
-                db = firestore.client()
-                db.collection("alerts").document(request.alert_id).update({
-                    "is_safe": True,
-                    "safe_confirmed_at": alert["safe_confirmed_at"],
-                })
-            except Exception as e:
-                print(f"[SHESAFE] Firestore safe update failed: {e}")
-
-        threading.Thread(target=update_firestore).start()
+    # Update Supabase
+    from core.supabase_client import update_alert
+    threading.Thread(
+        target=update_alert,
+        args=(request.alert_id, {"is_safe": True, "safe_confirmed_at": alert["safe_confirmed_at"]}),
+    ).start()
 
     return ImSafeResponse(
         status="safe_confirmed",

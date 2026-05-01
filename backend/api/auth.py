@@ -1,14 +1,13 @@
 """
-SheSafe — Auth API
-Role-based registration and login for Victim, Police, Contact.
-PIN is hashed with bcrypt and stored in Firestore.
+SheSafe — Auth API (Supabase backend)
+Role-based registration and login for User (victim), Police, Contact.
 """
-from fastapi import APIRouter, HTTPException, Depends
-from pydantic import BaseModel, EmailStr
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
 from passlib.context import CryptContext
 from jose import jwt, JWTError
 from datetime import datetime, timedelta
-import os, hashlib
+import os
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -18,10 +17,9 @@ ACCESS_TOKEN_EXPIRE_HOURS = 72
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-# In-memory user store (replace with Firestore in production)
-# Structure: {phone: {name, email, role, password_hash, pin_hash, contacts, ...}}
+# In-memory cache (primary fast store, Supabase is persistent backup)
 _users: dict = {}
-_tokens: dict = {}  # token → phone
+
 
 # ── Schemas ──────────────────────────────────────────────────────────────────
 
@@ -30,14 +28,11 @@ class RegisterRequest(BaseModel):
     phone: str
     email: str
     password: str
-    role: str          # "victim" | "police" | "contact"
-    pin: str = ""      # 4-digit PIN (required for victim)
-    # Victim-specific
+    role: str
+    pin: str = ""
     emergency_contacts: list = []
-    # Police-specific
     badge_number: str = ""
     station_name: str = ""
-    # Contact-specific
     victim_phone: str = ""
     relationship: str = ""
 
@@ -49,19 +44,14 @@ class VerifyPinRequest(BaseModel):
     phone: str
     pin: str
 
-class ProfileUpdateRequest(BaseModel):
-    phone: str
-    token: str
-    emergency_contacts: list = None
-    victim_phone: str = None
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _hash(value: str) -> str:
-    return pwd_context.hash(value)
+    return pwd_context.hash(value[:72])  # bcrypt max 72 bytes
 
 def _verify(plain: str, hashed: str) -> bool:
-    return pwd_context.verify(plain, hashed)
+    return pwd_context.verify(plain[:72], hashed)
 
 def _create_token(phone: str, role: str) -> str:
     payload = {
@@ -69,30 +59,29 @@ def _create_token(phone: str, role: str) -> str:
         "role": role,
         "exp": datetime.utcnow() + timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS)
     }
-    token = jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
-    _tokens[token] = phone
-    return token
+    return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
-def _decode_token(token: str) -> dict:
-    try:
-        return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-    except JWTError:
-        raise HTTPException(status_code=401, detail="Invalid or expired token")
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
 @router.post("/register")
 async def register(req: RegisterRequest):
-    if req.phone in _users:
-        raise HTTPException(status_code=409, detail="Phone number already registered")
-
     if req.role not in ("victim", "police", "contact"):
         raise HTTPException(status_code=400, detail="Role must be victim, police, or contact")
 
     if req.role == "victim" and (not req.pin or len(req.pin) != 4):
-        raise HTTPException(status_code=400, detail="Victims must set a 4-digit PIN")
+        raise HTTPException(status_code=400, detail="Please set a 4-digit safety PIN")
 
-    _users[req.phone] = {
+    # Check in-memory cache first, then Supabase
+    if req.phone in _users:
+        raise HTTPException(status_code=409, detail="Phone number already registered")
+
+    from core.supabase_client import get_user, upsert_user
+    existing = get_user(req.phone)
+    if existing:
+        raise HTTPException(status_code=409, detail="Phone number already registered")
+
+    user = {
         "name": req.name,
         "phone": req.phone,
         "email": req.email,
@@ -107,27 +96,30 @@ async def register(req: RegisterRequest):
         "created_at": datetime.utcnow().isoformat(),
     }
 
+    _users[req.phone] = user
+
+    # Persist to Supabase (non-blocking)
+    import threading
+    threading.Thread(target=upsert_user, args=({
+        "phone": req.phone,
+        "name": req.name,
+        "email": req.email,
+        "role": req.role,
+        "password_hash": user["password_hash"],
+        "pin_hash": user["pin_hash"],
+        "emergency_contacts": req.emergency_contacts,
+        "badge_number": req.badge_number,
+        "station_name": req.station_name,
+        "victim_phone": req.victim_phone,
+        "relationship": req.relationship,
+        "created_at": user["created_at"],
+    },)).start()
+
     token = _create_token(req.phone, req.role)
-
-    # Try to persist to Firestore
-    try:
-        from main import db
-        if db:
-            user_data = dict(_users[req.phone])
-            user_data.pop("password_hash", None)  # Don't store raw hash in Firestore key
-            db.collection("users").document(req.phone).set(user_data)
-    except Exception as e:
-        print(f"[AUTH] Firestore save skipped: {e}")
-
     return {
         "success": True,
         "token": token,
-        "user": {
-            "name": req.name,
-            "phone": req.phone,
-            "role": req.role,
-            "email": req.email,
-        }
+        "user": {"name": req.name, "phone": req.phone, "role": req.role, "email": req.email}
     }
 
 
@@ -135,26 +127,21 @@ async def register(req: RegisterRequest):
 async def login(req: LoginRequest):
     user = _users.get(req.phone)
 
-    # Try Firestore if not in memory
     if not user:
-        try:
-            from main import db
-            if db:
-                doc = db.collection("users").document(req.phone).get()
-                if doc.exists:
-                    user = doc.to_dict()
-                    _users[req.phone] = user
-        except Exception:
-            pass
+        # Try Supabase
+        from core.supabase_client import get_user
+        supabase_user = get_user(req.phone)
+        if supabase_user:
+            user = supabase_user
+            _users[req.phone] = user  # cache it
 
     if not user:
-        raise HTTPException(status_code=404, detail="Phone number not registered")
+        raise HTTPException(status_code=404, detail="Phone number not registered. Please sign up first.")
 
     if not _verify(req.password, user["password_hash"]):
-        raise HTTPException(status_code=401, detail="Incorrect password")
+        raise HTTPException(status_code=401, detail="Incorrect password. Please try again.")
 
     token = _create_token(req.phone, user["role"])
-
     return {
         "success": True,
         "token": token,
@@ -174,14 +161,14 @@ async def login(req: LoginRequest):
 async def verify_pin(req: VerifyPinRequest):
     user = _users.get(req.phone)
     if not user:
+        from core.supabase_client import get_user
+        user = get_user(req.phone)
+    if not user:
         raise HTTPException(status_code=404, detail="User not found")
-
     if not user.get("pin_hash"):
         raise HTTPException(status_code=400, detail="No PIN set for this account")
-
     if not _verify(req.pin, user["pin_hash"]):
         return {"valid": False, "message": "Incorrect PIN"}
-
     return {"valid": True, "message": "PIN verified"}
 
 
@@ -189,6 +176,8 @@ async def verify_pin(req: VerifyPinRequest):
 async def get_profile(phone: str):
     user = _users.get(phone)
     if not user:
+        from core.supabase_client import get_user
+        user = get_user(phone)
+    if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    safe = {k: v for k, v in user.items() if k not in ("password_hash", "pin_hash")}
-    return safe
+    return {k: v for k, v in user.items() if k not in ("password_hash", "pin_hash")}
