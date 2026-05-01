@@ -1,5 +1,6 @@
 # Environment files
 .env
+.env.local
 backend/.env
 firebase_service_account.json
 backend/firebase_service_account.json
@@ -28,6 +29,9 @@ Thumbs.db
 .idea/
 *.swp
 *.swo
+
+# Logs
+*.log
 
 # Node (for dashboard)
 node_modules/
