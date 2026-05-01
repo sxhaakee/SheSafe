@@ -1,12 +1,13 @@
 // SheSafe — Signup Screen v4
 // Emergency contacts (2 required for victim) + PIN confirm
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useContext } from 'react';
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity,
   Animated, Alert, ActivityIndicator, StatusBar,
   KeyboardAvoidingView, Platform, SafeAreaView, Image, ScrollView
 } from 'react-native';
 import { register } from '../../services/AuthService';
+import { AuthContext } from '../../../App';
 
 const ROLE_META = {
   victim:  { label: 'Personal Safety',  color: '#4F35D2', bg: '#EEE9FF' },
@@ -15,6 +16,7 @@ const ROLE_META = {
 };
 
 export default function SignupScreen({ navigation, route }) {
+  const { onLogin } = useContext(AuthContext);
   const role = route?.params?.role || 'victim';
   const meta = ROLE_META[role] || ROLE_META.victim;
 
@@ -103,7 +105,7 @@ export default function SignupScreen({ navigation, route }) {
         badgeNumber, stationName, victimPhone,
         relationship,
       });
-      navigation.reset({ index: 0, routes: [{ name: 'Main' }] });
+      await onLogin();  // refreshes App.js user state → switches to MainNavigator
     } catch (err) {
       Alert.alert('Registration Failed', err.message || 'Something went wrong. Please try again.');
     } finally {

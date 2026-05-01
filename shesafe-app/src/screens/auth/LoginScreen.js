@@ -1,13 +1,15 @@
 // SheSafe — Login Screen v3 (World-Class UI)
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useContext } from 'react';
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity,
   Animated, Alert, ActivityIndicator, StatusBar,
   KeyboardAvoidingView, Platform, SafeAreaView, Image, ScrollView
 } from 'react-native';
 import { login } from '../../services/AuthService';
+import { AuthContext } from '../../../App';
 
 export default function LoginScreen({ navigation }) {
+  const { onLogin } = useContext(AuthContext);
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -30,7 +32,7 @@ export default function LoginScreen({ navigation }) {
     setLoading(true);
     try {
       await login({ phone: phone.trim(), password });
-      navigation.reset({ index: 0, routes: [{ name: 'Main' }] });
+      await onLogin();  // refreshes App.js user state → switches to MainNavigator
     } catch (err) {
       Alert.alert('Sign In Failed', err.message || 'Check your credentials and try again.');
     } finally {
