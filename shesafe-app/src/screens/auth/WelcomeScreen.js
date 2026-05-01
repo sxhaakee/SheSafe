@@ -6,9 +6,30 @@ import { LinearGradient } from 'expo-linear-gradient';
 const { width } = Dimensions.get('window');
 
 const ROLES = [
-  { id: 'victim', icon: '🛡️', title: 'I need protection', subtitle: 'Victim safety mode\nActive monitoring & SOS', color: '#6C3CE1', light: '#EDE9FE' },
-  { id: 'police', icon: '🏛️', title: 'I am a Police Officer', subtitle: 'Alert dashboard\nReceive & respond to SOS', color: '#1D4ED8', light: '#DBEAFE' },
-  { id: 'contact', icon: '👨‍👩‍👧', title: 'I am a Trusted Contact', subtitle: 'Track & support\nReceive safety alerts', color: '#059669', light: '#D1FAE5' },
+  {
+    id: 'victim',
+    icon: '🛡️',
+    title: 'Personal Safety',
+    subtitle: 'Active monitoring & SOS\nShake to trigger emergency alert',
+    color: '#6C3CE1',
+    light: '#EDE9FE',
+  },
+  {
+    id: 'police',
+    icon: '🏛️',
+    title: 'Law Enforcement',
+    subtitle: 'Alert dashboard\nReceive & respond to SOS calls',
+    color: '#1D4ED8',
+    light: '#DBEAFE',
+  },
+  {
+    id: 'contact',
+    icon: '👨‍👩‍👧',
+    title: 'Trusted Guardian',
+    subtitle: 'Track & support\nReceive real-time safety alerts',
+    color: '#059669',
+    light: '#D1FAE5',
+  },
 ];
 
 export default function WelcomeScreen({ navigation }) {
@@ -32,15 +53,20 @@ export default function WelcomeScreen({ navigation }) {
       <LinearGradient colors={['#F5F3FF', '#FFFFFF']} style={StyleSheet.absoluteFillObject} />
 
       <Animated.View style={[styles.header, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
+        <View style={styles.logoBadge}>
+          <Text style={styles.logoIcon}>🛡️</Text>
+        </View>
         <Text style={styles.logo}>SheSafe</Text>
         <Text style={styles.tagline}>Protection that works when it matters most</Text>
       </Animated.View>
+
+      <Text style={styles.sectionLabel}>SELECT YOUR ROLE</Text>
 
       <View style={styles.cards}>
         {ROLES.map((role, i) => (
           <Animated.View key={role.id} style={{ transform: [{ translateY: cardAnims[i] }], opacity: cardAnims[i].interpolate({ inputRange: [0, 60], outputRange: [1, 0] }) }}>
             <TouchableOpacity
-              style={[styles.card, { borderColor: role.color + '30' }]}
+              style={[styles.card, { borderColor: role.color + '40' }]}
               onPress={() => navigation.navigate('Signup', { role: role.id, roleColor: role.color })}
               activeOpacity={0.85}
             >
@@ -51,7 +77,9 @@ export default function WelcomeScreen({ navigation }) {
                 <Text style={[styles.cardTitle, { color: role.color }]}>{role.title}</Text>
                 <Text style={styles.cardSub}>{role.subtitle}</Text>
               </View>
-              <Text style={[styles.arrow, { color: role.color }]}>›</Text>
+              <View style={[styles.arrowBox, { backgroundColor: role.light }]}>
+                <Text style={[styles.arrow, { color: role.color }]}>›</Text>
+              </View>
             </TouchableOpacity>
           </Animated.View>
         ))}
@@ -66,19 +94,28 @@ export default function WelcomeScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff', paddingHorizontal: 24, paddingTop: 60 },
-  header: { marginBottom: 36, alignItems: 'center' },
-  logo: { fontSize: 36, fontWeight: '800', color: '#6C3CE1', letterSpacing: -1 },
-  tagline: { fontSize: 14, color: '#6B7280', marginTop: 6, textAlign: 'center' },
-  cards: { gap: 14 },
-  card: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 16, padding: 18, borderWidth: 1.5, shadowColor: '#6C3CE1', shadowOpacity: 0.06, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 3 },
+  container: { flex: 1, backgroundColor: '#fff', paddingHorizontal: 24, paddingTop: 56 },
+  header: { marginBottom: 28, alignItems: 'center' },
+  logoBadge: { width: 64, height: 64, borderRadius: 20, backgroundColor: '#EDE9FE', alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
+  logoIcon: { fontSize: 32 },
+  logo: { fontSize: 32, fontWeight: '800', color: '#6C3CE1', letterSpacing: -1 },
+  tagline: { fontSize: 13, color: '#6B7280', marginTop: 6, textAlign: 'center', lineHeight: 18 },
+  sectionLabel: { fontSize: 11, fontWeight: '700', color: '#9CA3AF', letterSpacing: 1.5, marginBottom: 14 },
+  cards: { gap: 12 },
+  card: {
+    flexDirection: 'row', alignItems: 'center', backgroundColor: '#FAFAFA',
+    borderRadius: 16, padding: 16, borderWidth: 1.5,
+    shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 }, elevation: 2,
+  },
   iconBox: { width: 52, height: 52, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   icon: { fontSize: 24 },
   cardText: { flex: 1, marginLeft: 14 },
-  cardTitle: { fontSize: 15, fontWeight: '700' },
-  cardSub: { fontSize: 12, color: '#6B7280', marginTop: 2, lineHeight: 17 },
-  arrow: { fontSize: 24, fontWeight: '300' },
-  loginRow: { flexDirection: 'row', justifyContent: 'center', marginTop: 32 },
+  cardTitle: { fontSize: 15, fontWeight: '700', color: '#111' },
+  cardSub: { fontSize: 12, color: '#6B7280', marginTop: 3, lineHeight: 17 },
+  arrowBox: { width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  arrow: { fontSize: 22, fontWeight: '600', marginTop: -2 },
+  loginRow: { flexDirection: 'row', justifyContent: 'center', marginTop: 28 },
   loginText: { color: '#6B7280', fontSize: 14 },
   loginLink: { color: '#6C3CE1', fontWeight: '700', fontSize: 14 },
 });

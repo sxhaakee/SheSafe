@@ -1,6 +1,9 @@
 // SheSafe — Login Screen
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, Animated, Alert, ActivityIndicator, StatusBar, KeyboardAvoidingView, Platform } from 'react-native';
+import {
+  View, Text, StyleSheet, TextInput, TouchableOpacity,
+  Animated, Alert, ActivityIndicator, StatusBar, KeyboardAvoidingView, Platform
+} from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { login } from '../../services/AuthService';
 
@@ -30,7 +33,7 @@ export default function LoginScreen({ navigation }) {
       await login({ phone: phone.trim(), password });
       navigation.reset({ index: 0, routes: [{ name: 'Main' }] });
     } catch (err) {
-      Alert.alert('Login Failed', err.message || 'Check your phone number and password');
+      Alert.alert('Sign In Failed', err.message || 'Check your phone number and password');
     } finally {
       setLoading(false);
     }
@@ -40,6 +43,7 @@ export default function LoginScreen({ navigation }) {
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <StatusBar barStyle="dark-content" backgroundColor="#fff" />
       <LinearGradient colors={['#F5F3FF', '#FFFFFF', '#FFFFFF']} style={StyleSheet.absoluteFillObject} />
+
       <View style={styles.container}>
         <Animated.View style={[styles.header, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
@@ -55,15 +59,24 @@ export default function LoginScreen({ navigation }) {
         <Animated.View style={[styles.form, { opacity: fadeAnim }]}>
           <Text style={styles.label}>Phone Number</Text>
           <TextInput
-            style={styles.input} placeholder="+91 98765 43210" value={phone}
-            onChangeText={setPhone} keyboardType="phone-pad" autoCapitalize="none"
+            style={styles.input}
+            placeholder="+91 98765 43210"
+            placeholderTextColor="#9CA3AF"
+            value={phone}
+            onChangeText={setPhone}
+            keyboardType="phone-pad"
+            autoCapitalize="none"
           />
 
           <Text style={styles.label}>Password</Text>
           <View style={styles.passRow}>
             <TextInput
-              style={[styles.input, { flex: 1, marginBottom: 0 }]} placeholder="Your password"
-              value={password} onChangeText={setPassword} secureTextEntry={!showPass}
+              style={[styles.input, { flex: 1, marginBottom: 0 }]}
+              placeholder="Your password"
+              placeholderTextColor="#9CA3AF"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry={!showPass}
             />
             <TouchableOpacity onPress={() => setShowPass(!showPass)} style={styles.showBtn}>
               <Text style={styles.showTxt}>{showPass ? '🙈' : '👁️'}</Text>
@@ -87,6 +100,10 @@ export default function LoginScreen({ navigation }) {
   );
 }
 
+const INPUT_BG = '#F3F4F6';
+const INPUT_BORDER = '#D1D5DB';
+const TEXT_COLOR = '#111827';
+
 const styles = StyleSheet.create({
   container: { flex: 1, paddingHorizontal: 24 },
   header: { paddingTop: 56, alignItems: 'center', marginBottom: 32 },
@@ -94,15 +111,30 @@ const styles = StyleSheet.create({
   backTxt: { fontSize: 16, color: '#6C3CE1', fontWeight: '600' },
   logoBox: { width: 72, height: 72, borderRadius: 20, backgroundColor: '#EDE9FE', alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
   logoIcon: { fontSize: 36 },
-  title: { fontSize: 26, fontWeight: '800', color: '#1A1A2E' },
+  title: { fontSize: 26, fontWeight: '800', color: '#111827' },
   subtitle: { fontSize: 14, color: '#6B7280', marginTop: 4 },
   form: {},
   label: { fontSize: 13, fontWeight: '600', color: '#374151', marginBottom: 6, marginTop: 16 },
-  input: { borderWidth: 1.5, borderColor: '#E8E0FF', borderRadius: 12, padding: 14, fontSize: 15, color: '#1A1A2E', backgroundColor: '#FAFAFA', marginBottom: 4 },
+  input: {
+    borderWidth: 1.5,
+    borderColor: INPUT_BORDER,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+    fontSize: 15,
+    color: TEXT_COLOR,
+    backgroundColor: INPUT_BG,
+    marginBottom: 2,
+  },
   passRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  showBtn: { padding: 14 },
+  showBtn: { padding: 12 },
   showTxt: { fontSize: 18 },
-  signInBtn: { backgroundColor: '#6C3CE1', borderRadius: 14, padding: 16, alignItems: 'center', marginTop: 28, shadowColor: '#6C3CE1', shadowOpacity: 0.3, shadowRadius: 12, shadowOffset: { width: 0, height: 6 }, elevation: 8 },
+  signInBtn: {
+    backgroundColor: '#6C3CE1', borderRadius: 14, paddingVertical: 16,
+    alignItems: 'center', marginTop: 28,
+    shadowColor: '#6C3CE1', shadowOpacity: 0.3, shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 }, elevation: 8,
+  },
   signInText: { color: '#fff', fontSize: 17, fontWeight: '700' },
   registerRow: { flexDirection: 'row', justifyContent: 'center', marginTop: 20 },
   registerText: { color: '#6B7280', fontSize: 14 },
