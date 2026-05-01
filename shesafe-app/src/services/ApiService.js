@@ -1,7 +1,7 @@
 // SheSafe — API Service v3
 // Single source of truth for backend URL. No AsyncStorage caching to avoid stale URL bugs.
 
-const BASE_URL = 'http://192.0.0.2:8000';
+const BASE_URL = 'https://shesafe-cqp5.onrender.com';
 const TIMEOUT_MS = 12000;
 
 async function fetchWithTimeout(url, options = {}) {
