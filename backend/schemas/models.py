@@ -74,7 +74,8 @@ class RiskScoreRequest(BaseModel):
     time_of_day: Optional[str] = Field(None, description="HH:MM in 24h format. Auto-derived from timestamp if not provided.")
     behavior_flags: List[BehaviorFlag] = Field(default_factory=list)
     is_isolated_zone: bool = Field(False, description="Whether current location is flagged as isolated")
-    nearest_station_distance_km: Optional[float] = Field(None, description="Distance to nearest police station in km")
+    nearest_station_distance_km: Optional[float] = Field(None, description="Distance to nearest police station in km. Auto-computed if not provided.")
+    accel_magnitude: Optional[float] = Field(None, description="Current accelerometer magnitude in m/s². Used for struggle/drop detection.")
 
 
 class ContributingFactor(BaseModel):
@@ -82,6 +83,7 @@ class ContributingFactor(BaseModel):
     weight: float
     raw_score: float
     weighted_score: float
+    reasoning: Optional[str] = None
 
 
 class RiskScoreResponse(BaseModel):
@@ -92,6 +94,8 @@ class RiskScoreResponse(BaseModel):
     location_score: float
     time_score: float
     behavior_score: float
+    is_isolated_zone: bool = False
+    zone_data: Optional[dict] = None
 
 
 # ──────────────────────────────────────────────
