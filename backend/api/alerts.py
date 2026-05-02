@@ -71,7 +71,7 @@ def ensure_evidence_bucket(db=None):
 
 
 def save_alert_to_supabase(alert_id: str, alert_data: dict):
-    """Save alert to Supabase (non-blocking)."""
+    """Save alert to Supabase — this is the SOURCE OF TRUTH."""
     from core.supabase_client import insert_alert
     try:
         insert_alert({
@@ -386,56 +386,56 @@ async def confirm_safe(request: ImSafeRequest):
     alert["is_safe"] = True
     alert["safe_confirmed_at"] = datetime.now(timezone.utc).isoformat()
 
-    # Send "I'm Safe" notification to all recipients
-    safe_message = (
-        f"SHESAFE UPDATE: {alert['user_name']} has confirmed she is SAFE.\n"
-        f"Alert {request.alert_id} resolved at "
-        f"{datetime.now(timezone.utc).strftime('%H:%M IST, %d %b %Y')}.\n"
-        f"No further action needed."
-    )
-
-    notifications_sent = 0
-    for recipient in alert.get("recipients", []):
-        status, _, _ = send_sms(recipient["phone"], safe_message)
-        if "sent" in status:
-            notifications_sent += 1
-
-    # Update Supabase
+    # Update Supabase (source of truth)
     from core.supabase_client import update_alert
     threading.Thread(
         target=update_alert,
         args=(request.alert_id, {"is_safe": True, "safe_confirmed_at": alert["safe_confirmed_at"]}),
     ).start()
 
+    print(f"[SHESAFE] Alert {request.alert_id} marked SAFE via internet.")
+
     return ImSafeResponse(
         status="safe_confirmed",
         alert_id=request.alert_id,
-        notifications_sent=notifications_sent,
+        notifications_sent=0,
     )
 
 
 @router.get("/status/{alert_id}")
 async def get_alert_status(alert_id: str):
-    """Get current status of an alert (used by trusted contact dashboard)."""
-    if alert_id not in active_alerts:
+    """Get current status of an alert. Checks memory first, then Supabase."""
+    alert = active_alerts.get(alert_id)
+
+    # If not in memory, try Supabase (handles backend restarts)
+    if not alert:
+        from core.supabase_client import get_alert_by_id
+        alert = get_alert_by_id(alert_id)
+        if alert:
+            # Hydrate in-memory cache
+            alert.setdefault("location_pings", [])
+            alert.setdefault("recipients", [])
+            alert.setdefault("evidence_urls", [])
+            active_alerts[alert_id] = alert
+
+    if not alert:
         raise HTTPException(status_code=404, detail=f"Alert {alert_id} not found")
 
-    alert = active_alerts[alert_id]
     return {
         "alert_id": alert_id,
-        "user_name": alert["user_name"],
-        "user_phone": alert["user_phone"],
-        "lat": alert["lat"],
-        "lng": alert["lng"],
+        "user_name": alert.get("user_name", ""),
+        "user_phone": alert.get("user_phone", ""),
+        "lat": alert.get("lat"),
+        "lng": alert.get("lng"),
         "address": alert.get("address"),
-        "risk_score": alert["risk_score"],
-        "risk_level": alert["risk_level"],
-        "trigger_type": alert["trigger_type"],
-        "timestamp": alert["timestamp"],
-        "maps_link": alert["maps_link"],
-        "is_safe": alert["is_safe"],
-        "location_pings": alert["location_pings"],
-        "total_pings": len(alert["location_pings"]),
+        "risk_score": alert.get("risk_score", 0),
+        "risk_level": alert.get("risk_level", ""),
+        "trigger_type": alert.get("trigger_type", ""),
+        "timestamp": alert.get("timestamp", ""),
+        "maps_link": alert.get("maps_link", ""),
+        "is_safe": alert.get("is_safe", False),
+        "location_pings": alert.get("location_pings", []),
+        "total_pings": len(alert.get("location_pings", [])),
         "recipients": alert.get("recipients", []),
         "evidence_urls": alert.get("evidence_urls", []),
     }

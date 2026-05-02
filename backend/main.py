@@ -33,13 +33,7 @@ async def lifespan(app: FastAPI):
     # Alert notification system
     init_firebase()
 
-    # Twilio SMS/WhatsApp
-    if settings.is_twilio_configured():
-        print(f"[{settings.APP_NAME}] Twilio configured — SMS will be sent live.")
-    else:
-        print(f"[{settings.APP_NAME}] Twilio NOT configured — running in DEMO mode (SMS simulated).")
-
-    print(f"[{settings.APP_NAME}] ✅ Backend ready.")
+    print(f"[{settings.APP_NAME}] ✅ Backend ready (Internet-based alerts via Supabase).")
     yield
     print(f"[{settings.APP_NAME}] Shutting down...")
 
@@ -73,17 +67,42 @@ app.include_router(alerts_router)
 
 @app.get("/ping")
 async def ping():
-    """Health check. Returns active alert IDs for mobile polling."""
+    """
+    Health check + active alert polling.
+    Police/family apps call this every 5 seconds.
+    Reads from BOTH in-memory store and Supabase to ensure alerts survive restarts.
+    """
     from api.alerts import active_alerts
-    active = [aid for aid, data in active_alerts.items() if not data.get("is_safe", False)]
+    from core.supabase_client import get_active_alerts
+
+    # In-memory alerts
+    memory_ids = {aid for aid, data in active_alerts.items() if not data.get("is_safe", False)}
+
+    # Supabase alerts (source of truth — survives backend restarts)
+    supabase_alerts = get_active_alerts()
+    supabase_ids = {a["alert_id"] for a in supabase_alerts}
+
+    # Merge both sets — hydrate in-memory from Supabase if missing
+    for sa in supabase_alerts:
+        aid = sa["alert_id"]
+        if aid not in active_alerts:
+            # Hydrate in-memory cache from Supabase
+            active_alerts[aid] = {
+                **sa,
+                "location_pings": sa.get("location_pings") or [],
+                "recipients": sa.get("recipients") or [],
+                "evidence_urls": sa.get("evidence_urls") or [],
+            }
+
+    all_active = list(memory_ids | supabase_ids)
+
     return {
         "status": "alive",
         "app": settings.APP_NAME,
         "version": settings.APP_VERSION,
-        "twilio_configured": settings.is_twilio_configured(),
         "supabase_configured": supabase_configured(),
-        "active_alerts": active,
-        "total_alerts": len(active_alerts),
+        "active_alerts": all_active,
+        "total_alerts": len(all_active),
     }
 
 
@@ -102,6 +121,7 @@ async def root():
             "location_ping": "POST /alert/ping",
             "confirm_safe": "POST /alert/safe",
             "alert_status": "GET /alert/status/{alert_id}",
+            "evidence_upload": "POST /alert/evidence",
         },
         "docs": "/docs",
     }
