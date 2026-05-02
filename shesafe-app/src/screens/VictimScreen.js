@@ -154,7 +154,7 @@ export default function VictimScreen({ navigation }) {
       } else {
         consecutiveStruggle.current = 0;
       }
-      const shouldRecord = result.riskScore > 60;
+      const shouldRecord = result.riskScore > 40;
       if (shouldRecord && !isRecording) {
         setIsRecording(true);
         startAudioRecording();
@@ -176,7 +176,7 @@ export default function VictimScreen({ navigation }) {
           consecutiveStruggleWindows: consecutiveStruggle.current,
         });
         setRisk(r);
-        if (r.alertLevel === 2 && !alertActive) triggerEmergency('passive');
+        if (r.alertLevel >= 1 && !alertActive) triggerEmergency('passive');
         return prev;
       });
     }, 5000);
@@ -259,6 +259,12 @@ export default function VictimScreen({ navigation }) {
   async function fireAlert(trigger) {
     try {
       const contacts = user?.emergency_contacts || [];
+      // Demo police stations — replace with dynamic lookup in production
+      const demoStations = [
+        { name: 'Koramangala Police Station', phone: '+918022951000' },
+        { name: 'HSR Layout Police Station',  phone: '+918022571060' },
+        { name: 'BTM Layout Police Station',  phone: '+918026680100' },
+      ];
       const res = await ApiService.fireAlert({
         user_name: user?.name || 'SheSafe User',
         user_phone: user?.phone || '+919999999999',
@@ -269,7 +275,7 @@ export default function VictimScreen({ navigation }) {
         risk_level: 'high',
         trigger_type: trigger,
         trusted_contacts: contacts.map(c => ({ name: c.name || 'Contact', phone: c.phone || '', relation: c.relation || 'Contact' })),
-        nearest_stations: [],
+        nearest_stations: demoStations,
       });
       alertIdRef.current = res.alert_id;
       setAlertId(res.alert_id);

@@ -362,4 +362,5 @@ async def get_alert_status(alert_id: str):
         "is_safe": alert["is_safe"],
         "location_pings": alert["location_pings"],
         "total_pings": len(alert["location_pings"]),
+        "recipients": alert.get("recipients", []),
     }

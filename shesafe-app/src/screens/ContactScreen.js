@@ -1,9 +1,9 @@
-// SheSafe — Contact / Family Screen
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Linking, RefreshControl, ScrollView, StatusBar, Animated, Vibration } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import MapView, { Marker, Polyline } from 'react-native-maps';
+import MapView, { Marker, Polyline, PROVIDER_DEFAULT } from 'react-native-maps';
 import { Ionicons } from '@expo/vector-icons';
+import { Audio } from 'expo-av';
 import { getStoredUser, logout } from '../services/AuthService';
 import { AuthContext } from '../context/AuthContext';
 import ApiService from '../services/ApiService';
@@ -19,21 +19,44 @@ export default function ContactScreen() {
   const pollRef = useRef(null);
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  const sirenRef = useRef(null);
+  const wasAlertingRef = useRef(false);
 
   useEffect(() => {
     Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }).start();
     getStoredUser().then(setUser);
     fetchAlerts();
-    pollRef.current = setInterval(fetchAlerts, POLL_MS);
+    pollRef.current = setInterval(fetchAlerts, 5000);
+    Audio.requestPermissionsAsync();
     return () => {
       clearInterval(pollRef.current);
       Vibration.cancel();
+      stopSiren();
     };
   }, []);
 
   async function handleLogout() {
     await logout();
     await onLogin();
+  }
+
+  async function playSiren() {
+    try {
+      if (sirenRef.current) return;
+      await Audio.setAudioModeAsync({ playsInSilentModeIOS: true, staysActiveInBackground: true, shouldDuckAndroid: false });
+      const { sound } = await Audio.Sound.createAsync(
+        { uri: 'https://www.soundjay.com/misc/sounds/emergency-alarm-1.mp3' },
+        { shouldPlay: true, isLooping: true, volume: 1.0 }
+      );
+      sirenRef.current = sound;
+    } catch (e) { console.log('Siren error:', e.message); }
+  }
+
+  async function stopSiren() {
+    if (sirenRef.current) {
+      try { await sirenRef.current.stopAsync(); await sirenRef.current.unloadAsync(); } catch {}
+      sirenRef.current = null;
+    }
   }
 
   useEffect(() => {
@@ -52,21 +75,33 @@ export default function ContactScreen() {
   async function fetchAlerts() {
     try {
       const data = await ApiService.ping();
-      if (data.active_alerts?.length > 0) {
+      if (data?.active_alerts?.length > 0) {
         const detail = await ApiService.getAlertStatus(data.active_alerts[0]);
         setActiveAlert(detail);
         if (detail && !detail.is_safe) {
-           Vibration.vibrate([0, 500, 200, 500], true);
+          Vibration.vibrate([0, 600, 200, 600], true);
+          if (!wasAlertingRef.current) {
+            wasAlertingRef.current = true;
+            playSiren();
+          }
         } else {
-           Vibration.cancel();
+          Vibration.cancel();
+          if (wasAlertingRef.current) {
+            wasAlertingRef.current = false;
+            stopSiren();
+          }
         }
-        if (detail.location_pings?.length > 0) {
+        if (detail?.location_pings?.length > 0) {
           setLastPing(detail.location_pings[detail.location_pings.length - 1]);
         }
       } else {
         setActiveAlert(null);
         setLastPing(null);
         Vibration.cancel();
+        if (wasAlertingRef.current) {
+          wasAlertingRef.current = false;
+          stopSiren();
+        }
       }
     } catch {}
   }
@@ -146,7 +181,13 @@ export default function ContactScreen() {
             {/* Location Map */}
             <View style={styles.mapContainer}>
               <MapView
+                provider={PROVIDER_DEFAULT}
                 style={StyleSheet.absoluteFillObject}
+                scrollEnabled={false}
+                zoomEnabled={true}
+                pitchEnabled={false}
+                rotateEnabled={false}
+                toolbarEnabled={false}
                 region={{
                   latitude: activeAlert.lat || 12.9716,
                   longitude: activeAlert.lng || 77.5946,

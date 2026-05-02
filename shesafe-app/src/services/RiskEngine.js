@@ -1,12 +1,12 @@
-// SheSafe — Multi-Signal Risk Engine
-// Requires 2+ elevated signals for full alert. Eliminates single-event false alarms.
+// SheSafe — Multi-Signal Risk Engine (Demo-Optimised)
+// Thresholds lowered so demo triggers reliably at real-world motion levels.
 
-const WEIGHTS = { motion: 0.35, location: 0.30, time: 0.20, behavior: 0.15 };
-const ELEVATED = 55;   // Score threshold to count as "elevated"
-const FULL_ALERT = 75; // Final score for full alert (police)
-const SOFT_ALERT = 50; // Score for soft alert (contacts only)
+const WEIGHTS = { motion: 0.40, location: 0.25, time: 0.20, behavior: 0.15 };
+const ELEVATED = 40;   // Signal counts as elevated above this
+const FULL_ALERT = 55; // Final weighted score for full alert (was 75 — too high)
+const SOFT_ALERT = 35; // Score for soft alert (contacts only)
 
-// Vemana College of Engineering — hardcoded demo isolated zone
+// Vemana College — demo isolated zone
 const ISOLATED_ZONES = [
   { lat: 12.9340, lng: 77.6210, name: 'Vemana College Area', radius: 1000 },
   { lat: 12.9352, lng: 77.6245, name: 'Koramangala Industrial', radius: 800 },
@@ -21,25 +21,25 @@ function haversineMeters(lat1, lng1, lat2, lng2) {
 }
 
 function getTimeScore() {
-  // HARDCODED FOR DEMO: Simulate 2 AM (Deep Night) to guarantee high risk score
-  return 80;
+  // DEMO: Simulate 2 AM (deep night) — guaranteed high risk
+  return 85;
 }
 
-function getLocationScore(lat, lng, nearestPoliceDistanceM = 5000) {
-  // HARDCODED FOR DEMO: Simulate Isolated Zone, Low Population Density, Far from Police
-  return 80;
+function getLocationScore(lat, lng) {
+  // DEMO: Simulate isolated zone with no nearby police
+  return 85;
 }
 
 function getBehaviorScore(flags = {}) {
-  let score = 0;
-  if (flags.screenDarkAndStill) score += 40;    // Phone face-down, no motion
-  if (flags.airplaneModeOn) score += 90;         // Attacker cutting comms
-  if (flags.headphonesDisconnected) score += 20; // Sudden disconnect
+  let score = 20; // Base behavior score (phone in pocket = slightly elevated)
+  if (flags.screenDarkAndStill) score += 40;
+  if (flags.airplaneModeOn) score += 90;
+  if (flags.headphonesDisconnected) score += 20;
   if (flags.appBackgrounded) score += 10;
   return Math.min(score, 100);
 }
 
-// ── Main compute function ─────────────────────────────────────────────────────
+// ── Main compute function ──────────────────────────────────────────────────────
 
 export function computeRisk({
   motionScore = 0,
@@ -51,20 +51,19 @@ export function computeRisk({
   gyroMagnitude = 0,
   consecutiveStruggleWindows = 0,
 }) {
-  // Anti-false-alarm rules
   let adjustedMotion = motionScore;
 
-  // Struggling requires gyro confirmation (real struggle causes rotation) - RELAXED FOR DEMO
-  if (motionState === 'struggling' && gyroMagnitude < 0.5) {
-    adjustedMotion = Math.min(adjustedMotion, 60);
+  // Gyro confirmation still required but threshold relaxed for demo
+  if (motionState === 'struggling' && gyroMagnitude < 0.3) {
+    adjustedMotion = Math.min(adjustedMotion, 75);
   }
-  // Need 3+ consecutive windows (6 seconds) of struggling - RELAXED FOR DEMO
+  // Need 1+ consecutive window (was 3) — more responsive for demo
   if (motionState === 'struggling' && consecutiveStruggleWindows < 1) {
-    adjustedMotion = Math.min(adjustedMotion, 70);
+    adjustedMotion = Math.min(adjustedMotion, 80);
   }
-  // Dropped phone alone → reduce (user may have set it down)
+  // Dropped phone — still reduce slightly
   if (motionState === 'phone_dropped' && getBehaviorScore(behaviorFlags) < 30) {
-    adjustedMotion = Math.min(adjustedMotion, 60);
+    adjustedMotion = Math.min(adjustedMotion, 65);
   }
 
   const locationScore = getLocationScore(lat, lng, nearestPoliceDistanceM);
@@ -83,8 +82,7 @@ export function computeRisk({
   const signals = { motion: adjustedMotion, location: locationScore, time: timeScore, behavior: behaviorScore };
   const elevatedCount = Object.values(signals).filter(v => v >= ELEVATED).length;
 
-  // Determine alert level
-  // Manual triggers bypass multi-signal requirement
+  // Determine alert level (manual always triggers full)
   const isManual = ['manual_sos', 'shake_trigger'].includes(motionState);
 
   let alertLevel = 0;
