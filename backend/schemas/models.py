@@ -23,8 +23,10 @@ class MotionState(str, Enum):
 
 class RiskLevel(str, Enum):
     SAFE = "safe"              # 0-30
+    LOW = "low"                # alias for safe
     WATCHFUL = "watchful"      # 31-60
     ALERT = "alert"            # 61-80
+    HIGH = "high"              # alias for emergency
     EMERGENCY = "emergency"    # 81-100
 
 
@@ -111,7 +113,7 @@ class TrustedContact(BaseModel):
 class AlertStation(BaseModel):
     name: str
     phone: str
-    distance_km: float
+    distance_km: float = 0.0  # Optional — victim app doesn't always send this
 
 
 class AlertFireRequest(BaseModel):
@@ -168,8 +170,8 @@ class LocationPingResponse(BaseModel):
 
 class ImSafeRequest(BaseModel):
     alert_id: str
-    user_phone: str
-    pin: str = Field(..., min_length=6, max_length=6)
+    user_phone: str = ""
+    pin: str = ""  # Optional — victim confirms safe without PIN from the "I'm Safe" button
 
 
 class ImSafeResponse(BaseModel):
