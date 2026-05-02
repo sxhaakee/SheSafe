@@ -1,9 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Linking, RefreshControl, ScrollView, StatusBar, Animated, Vibration } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import MapView, { Marker, Polyline, PROVIDER_DEFAULT } from 'react-native-maps';
 import { Ionicons } from '@expo/vector-icons';
-import { Audio } from 'expo-av';
 import { getStoredUser, logout } from '../services/AuthService';
 import { AuthContext } from '../context/AuthContext';
 import ApiService from '../services/ApiService';
@@ -27,7 +25,6 @@ export default function ContactScreen() {
     getStoredUser().then(setUser);
     fetchAlerts();
     pollRef.current = setInterval(fetchAlerts, 5000);
-    Audio.requestPermissionsAsync();
     return () => {
       clearInterval(pollRef.current);
       Vibration.cancel();
@@ -167,44 +164,26 @@ export default function ContactScreen() {
               <Text style={styles.alertTime}>Triggered {timeSince(activeAlert.timestamp)} • {activeAlert.trigger_type?.replace('_', ' ').toUpperCase()}</Text>
             </Animated.View>
 
-            {/* Location Map */}
-            <View style={styles.mapContainer}>
-              <MapView
-                provider={PROVIDER_DEFAULT}
-                style={StyleSheet.absoluteFillObject}
-                scrollEnabled={false}
-                zoomEnabled={true}
-                pitchEnabled={false}
-                rotateEnabled={false}
-                toolbarEnabled={false}
-                region={{
-                  latitude: activeAlert.lat || 12.9716,
-                  longitude: activeAlert.lng || 77.5946,
-                  latitudeDelta: 0.05,
-                  longitudeDelta: 0.05,
-                }}
-              >
-                {activeAlert.location_pings && activeAlert.location_pings.length > 0 && (
-                  <Polyline 
-                    coordinates={activeAlert.location_pings.map(p => ({ latitude: p.lat, longitude: p.lng }))}
-                    strokeColor={riskColor(activeAlert.risk_score)}
-                    strokeWidth={4}
-                  />
-                )}
-                <Marker coordinate={{ latitude: activeAlert.lat, longitude: activeAlert.lng }}>
-                  <View style={{ alignItems: 'center', justifyContent: 'center', width: 40, height: 40 }}>
-                    <Animated.View style={[styles.markerPulse, { transform: [{ scale: pulseAnim }], backgroundColor: riskColor(activeAlert.risk_score) + '60' }]} />
-                    <View style={[styles.markerCore, { backgroundColor: riskColor(activeAlert.risk_score) }]} />
-                  </View>
-                </Marker>
-              </MapView>
-              <View style={styles.mapOverlay}>
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                  <Ionicons name="location" size={14} color="#1A1A2E" style={{ marginRight: 4 }} />
-                  <Text style={styles.mapOverlayTitle}>Tracking Active ({activeAlert.total_pings || 0} pings)</Text>
-                </View>
-                {lastPing && <Text style={styles.mapOverlaySub}>Last update: {timeSince(lastPing.timestamp)}</Text>}
+            {/* Location Card — no MapView to prevent crashes */}
+            <View style={styles.locationCard}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                <Ionicons name="location" size={16} color="#059669" style={{ marginRight: 6 }} />
+                <Text style={styles.cardTitle}>Live Location</Text>
               </View>
+              <Text style={styles.locationAddr}>{activeAlert.address || 'Location tracking active'}</Text>
+              <Text style={styles.locationCoords}>
+                📍 {(activeAlert.lat||12.934).toFixed(5)}, {(activeAlert.lng||77.621).toFixed(5)}
+              </Text>
+              {activeAlert.location_pings && activeAlert.location_pings.length > 0 && (
+                <Text style={styles.pingCount}>
+                  📡 {activeAlert.location_pings.length} location pings received
+                </Text>
+              )}
+              {lastPing && (
+                <Text style={styles.locationUpdate}>
+                  Last ping: {timeSince(lastPing.timestamp)} • {lastPing.lat?.toFixed(4)}, {lastPing.lng?.toFixed(4)}
+                </Text>
+              )}
             </View>
 
             {/* Action buttons */}

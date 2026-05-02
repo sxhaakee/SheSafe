@@ -6,7 +6,6 @@ import {
   Linking, RefreshControl, StatusBar, Animated, Vibration, ScrollView, Platform
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import MapView, { Marker, Callout, PROVIDER_DEFAULT } from 'react-native-maps';
 import { Ionicons } from '@expo/vector-icons';
 import { getStoredUser, logout } from '../services/AuthService';
 import { AuthContext } from '../context/AuthContext';
@@ -124,9 +123,14 @@ function AlertCard({ alert, onRespond }) {
             <Ionicons name="call" size={14} color="#1D4ED8" style={{ marginRight: 4 }} />
             <Text style={styles.callBtnText}>Call Victim</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.mapBtn} onPress={() => Linking.openURL(alert.maps_link || `https://maps.google.com/?q=${alert.lat},${alert.lng}`)}>
+          <TouchableOpacity style={styles.mapBtn} onPress={() => {
+            // Show location inline — do NOT exit app
+            const lat = alert.lat || 12.934;
+            const lng = alert.lng || 77.621;
+            alert.__showMap = !alert.__showMap;
+          }}>
             <Ionicons name="navigate" size={14} color="#6C3CE1" style={{ marginRight: 4 }} />
-            <Text style={styles.mapBtnText}>Navigate</Text>
+            <Text style={styles.mapBtnText}>📍 {(alert.lat||12.934).toFixed(4)}, {(alert.lng||77.621).toFixed(4)}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.respondBtn} onPress={() => onRespond(alert)}>
             <Ionicons name="checkmark-done" size={14} color="#fff" style={{ marginRight: 4 }} />
@@ -144,7 +148,6 @@ export default function PoliceScreen() {
   const [alerts, setAlerts] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
   const [lastUpdate, setLastUpdate] = useState(null);
-  const [viewMode, setViewMode] = useState('list');
   const pollRef = useRef(null);
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const sirenRef = useRef(null);
@@ -297,82 +300,25 @@ export default function PoliceScreen() {
         </View>
       </View>
 
-      {/* View Toggle */}
-      <View style={styles.toggleWrap}>
-        <TouchableOpacity style={[styles.toggleBtn, viewMode === 'list' && styles.toggleBtnActive]} onPress={() => setViewMode('list')}>
-          <Ionicons name="list" size={14} color={viewMode === 'list' ? '#fff' : '#1D4ED8'} style={{ marginRight: 6 }} />
-          <Text style={[styles.toggleText, viewMode === 'list' && styles.toggleTextActive]}>Alerts</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={[styles.toggleBtn, viewMode === 'map' && styles.toggleBtnActive]} onPress={() => setViewMode('map')}>
-          <Ionicons name="map" size={14} color={viewMode === 'map' ? '#fff' : '#1D4ED8'} style={{ marginRight: 6 }} />
-          <Text style={[styles.toggleText, viewMode === 'map' && styles.toggleTextActive]}>Live Map</Text>
-        </TouchableOpacity>
-      </View>
-
-      {viewMode === 'list' ? (
-        <FlatList
-          data={alerts}
-          keyExtractor={a => a.alert_id}
-          renderItem={({ item }) => <AlertCard alert={item} onRespond={() => {}} />}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#1D4ED8" />}
-          ListEmptyComponent={
-            <View style={styles.empty}>
-              <Ionicons name="shield-checkmark" size={56} color="#E8E0FF" style={{ marginBottom: 16 }} />
-              <Text style={styles.emptyTitle}>All Clear</Text>
-              <Text style={styles.emptyText}>No active alerts. Monitoring in progress.</Text>
-              <TouchableOpacity style={styles.demoBtn} onPress={simulateAlert}>
-                <Ionicons name="play" size={14} color="#fff" style={{ marginRight: 6 }} />
-                <Text style={styles.demoBtnText}>Simulate Incoming Alert</Text>
-              </TouchableOpacity>
-            </View>
-          }
-          contentContainerStyle={{ padding: 16, flexGrow: 1 }}
-        />
-      ) : (
-        <View style={styles.mapContainer}>
-          {/* Map — scrollEnabled=false prevents touch from escaping to Google Maps app */}
-          <MapView
-            provider={PROVIDER_DEFAULT}
-            style={StyleSheet.absoluteFillObject}
-            scrollEnabled={false}
-            zoomEnabled={true}
-            pitchEnabled={false}
-            rotateEnabled={false}
-            toolbarEnabled={false}
-            initialRegion={{
-              latitude: activeAlerts[0]?.lat || 12.9340,
-              longitude: activeAlerts[0]?.lng || 77.6210,
-              latitudeDelta: 0.08,
-              longitudeDelta: 0.08,
-            }}
-          >
-            {activeAlerts.map(alert => (
-              <Marker
-                key={alert.alert_id}
-                coordinate={{ latitude: alert.lat, longitude: alert.lng }}
-                tracksViewChanges={false}
-              >
-                <View style={styles.markerWrap}>
-                  <Animated.View style={[styles.markerRing, { transform: [{ scale: pulseAnim }], backgroundColor: alert.risk_score >= 80 ? '#FF475760' : '#FFAB0060' }]} />
-                  <View style={[styles.markerCore, { backgroundColor: alert.risk_score >= 80 ? '#FF4757' : '#FFAB00' }]} />
-                </View>
-                <Callout tooltip onPress={() => {}}>
-                  <View style={styles.calloutCard}>
-                    <Text style={styles.calloutTitle}>{alert.user_name}</Text>
-                    <Text style={styles.calloutRisk}>Risk: {alert.risk_score}</Text>
-                    <Text style={styles.calloutAddr} numberOfLines={2}>{alert.address}</Text>
-                  </View>
-                </Callout>
-              </Marker>
-            ))}
-          </MapView>
-          {activeAlerts.length === 0 && (
-            <View style={styles.mapEmpty}>
-              <Text style={styles.mapEmptyText}>No active alerts on map</Text>
-            </View>
-          )}
-        </View>
-      )}
+      {/* Alert List */}
+      <FlatList
+        data={alerts}
+        keyExtractor={a => a.alert_id}
+        renderItem={({ item }) => <AlertCard alert={item} onRespond={() => {}} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#1D4ED8" />}
+        ListEmptyComponent={
+          <View style={styles.empty}>
+            <Ionicons name="shield-checkmark" size={56} color="#E8E0FF" style={{ marginBottom: 16 }} />
+            <Text style={styles.emptyTitle}>All Clear</Text>
+            <Text style={styles.emptyText}>No active alerts. Monitoring in progress.</Text>
+            <TouchableOpacity style={styles.demoBtn} onPress={simulateAlert}>
+              <Ionicons name="play" size={14} color="#fff" style={{ marginRight: 6 }} />
+              <Text style={styles.demoBtnText}>Simulate Incoming Alert</Text>
+            </TouchableOpacity>
+          </View>
+        }
+        contentContainerStyle={{ padding: 16, flexGrow: 1 }}
+      />
     </View>
   );
 }
