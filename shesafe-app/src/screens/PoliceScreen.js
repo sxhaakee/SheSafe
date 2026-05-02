@@ -86,6 +86,39 @@ function AlertCard({ alert, onRespond }) {
         </View>
       )}
 
+      {/* Evidence Files */}
+      {alert.evidence_urls?.length > 0 && (
+        <View style={styles.evidenceBox}>
+          <Text style={styles.logTitle}>🎥 Evidence Files ({alert.evidence_urls.length})</Text>
+          {alert.evidence_urls.map((ev, i) => {
+            const isDemo = ev.url?.startsWith('DEMO://');
+            const sizeKB = ev.size_bytes ? `${(ev.size_bytes / 1024).toFixed(0)} KB` : '';
+            return (
+              <TouchableOpacity
+                key={i}
+                style={[styles.evidenceRow, isDemo && { opacity: 0.5 }]}
+                onPress={() => !isDemo && Linking.openURL(ev.url)}
+                disabled={isDemo}
+              >
+                <Ionicons
+                  name={ev.type === 'audio' ? 'mic' : 'videocam'}
+                  size={16}
+                  color={ev.type === 'audio' ? '#6C3CE1' : '#1D4ED8'}
+                />
+                <Text style={styles.evidenceText}>
+                  {ev.type === 'audio' ? '🎤 Audio Recording' : '🎥 Video Recording'}
+                  {sizeKB ? `  •  ${sizeKB}` : ''}
+                </Text>
+                {!isDemo && (
+                  <Ionicons name="open-outline" size={14} color="#6B7280" />
+                )}
+                {isDemo && <Text style={styles.demoTag}>DEMO</Text>}
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      )}
+
       {!alert.is_safe && (
         <View style={styles.alertActions}>
           <TouchableOpacity style={styles.callBtn} onPress={() => Linking.openURL(`tel:${alert.user_phone}`)}>
@@ -395,6 +428,11 @@ const styles = StyleSheet.create({
   logTitle: { fontSize: 12, fontWeight: '700', color: '#374151', marginBottom: 8 },
   logRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 },
   logText: { fontSize: 11, color: '#6B7280', flex: 1 },
+  evidenceBox: { backgroundColor: '#FFF7F7', borderRadius: 12, padding: 12, marginBottom: 12, borderWidth: 1, borderColor: '#FFE4E4' },
+  evidenceRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#FFE4E4' },
+  evidenceText: { flex: 1, fontSize: 12, fontWeight: '600', color: '#374151' },
+  demoTag: { fontSize: 9, fontWeight: '800', color: '#9CA3AF', backgroundColor: '#F3F4F6', borderRadius: 4, paddingHorizontal: 4, paddingVertical: 2 },
+
   alertActions: { flexDirection: 'row', gap: 8 },
   callBtn: { flex: 1, flexDirection: 'row', justifyContent: 'center', backgroundColor: '#EFF6FF', borderRadius: 10, padding: 10, alignItems: 'center' },
   callBtnText: { color: '#1D4ED8', fontWeight: '600', fontSize: 12 },

@@ -17,6 +17,7 @@ import { computeRisk, getRiskColor, getRiskLabel } from '../services/RiskEngine'
 import { getStoredUser, verifyPin, logout } from '../services/AuthService';
 import { AuthContext } from '../context/AuthContext';
 import ApiService from '../services/ApiService';
+import { uploadEvidence } from '../services/EvidenceService';
 
 const { width } = Dimensions.get('window');
 const COUNTDOWN = 5;
@@ -219,16 +220,22 @@ export default function VictimScreen({ navigation }) {
     try {
       await audioRecordingRef.current.stopAndUnloadAsync();
       const uri = audioRecordingRef.current.getURI();
-      console.log('Audio evidence saved:', uri);
       audioRecordingRef.current = null;
+      // Upload to Supabase Storage via backend
+      if (uri && alertIdRef.current) {
+        uploadEvidence(alertIdRef.current, uri, 'audio').catch(() => {});
+      }
     } catch (err) {}
   }
 
   async function startVideoRecording() {
     if (cameraRef.current && cameraPermission?.granted) {
       try {
-        const video = await cameraRef.current.recordAsync({ maxDuration: 60 });
-        console.log('Video evidence saved:', video.uri);
+        const video = await cameraRef.current.recordAsync({ maxDuration: 45 });
+        if (video?.uri && alertIdRef.current) {
+          // Upload video evidence non-blocking
+          uploadEvidence(alertIdRef.current, video.uri, 'video').catch(() => {});
+        }
       } catch (err) { console.log('Video record error', err); }
     }
   }

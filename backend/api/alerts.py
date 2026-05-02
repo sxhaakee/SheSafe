@@ -9,7 +9,7 @@ import threading
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form
 from core.config import settings
 
 from schemas.models import (
@@ -49,8 +49,24 @@ def init_firebase():
     from core.supabase_client import get_supabase, is_configured
     if is_configured():
         db = get_supabase()
+        # Ensure evidence storage bucket exists
+        ensure_evidence_bucket(db)
         return db
     return None
+
+
+def ensure_evidence_bucket(db=None):
+    """Create the public 'evidence' storage bucket if it doesn't exist."""
+    if db is None:
+        from core.supabase_client import get_supabase
+        db = get_supabase()
+    if not db:
+        return
+    try:
+        db.storage.create_bucket("evidence", options={"public": True})
+        print("[SHESAFE] Evidence storage bucket created.")
+    except Exception:
+        pass  # Already exists — that's fine
 
 
 
@@ -231,6 +247,7 @@ async def fire_alert(request: AlertFireRequest):
         "status": overall_status,
         "is_safe": False,
         "location_pings": [],
+        "evidence_urls": [],
         "recipients": [r.model_dump() for r in results],
     }
 
@@ -251,8 +268,65 @@ async def fire_alert(request: AlertFireRequest):
     )
 
 
+@router.post("/evidence")
+async def upload_evidence(
+    alert_id: str = Form(...),
+    evidence_type: str = Form(...),
+    file: UploadFile = File(...),
+):
+    """
+    Receive an audio/video evidence file from the victim's phone.
+    Uploads it to Supabase Storage and attaches the public URL to the alert.
+    """
+    if alert_id not in active_alerts:
+        raise HTTPException(status_code=404, detail=f"Alert {alert_id} not found")
+
+    file_data = await file.read()
+    ext = "m4a" if evidence_type == "audio" else "mp4"
+    storage_path = f"{alert_id}/{evidence_type}_{uuid.uuid4().hex[:8]}.{ext}"
+    public_url = None
+
+    from core.supabase_client import get_supabase
+    db = get_supabase()
+    if db:
+        try:
+            ensure_evidence_bucket(db)
+            db.storage.from_("evidence").upload(
+                storage_path,
+                file_data,
+                {"content-type": file.content_type or ("audio/m4a" if evidence_type == "audio" else "video/mp4")},
+            )
+            public_url = db.storage.from_("evidence").get_public_url(storage_path)
+            print(f"[SHESAFE] Evidence uploaded: {public_url}")
+        except Exception as e:
+            print(f"[SHESAFE] Evidence upload failed: {e}")
+    else:
+        # Demo mode — return a placeholder so the UI still renders
+        public_url = f"DEMO://{storage_path}"
+        print(f"[SHESAFE] Demo evidence (not stored): {storage_path}")
+
+    # Attach to alert record
+    evidence_entry = {
+        "type": evidence_type,
+        "url": public_url,
+        "filename": storage_path,
+        "uploaded_at": datetime.now(timezone.utc).isoformat(),
+        "size_bytes": len(file_data),
+    }
+    active_alerts[alert_id].setdefault("evidence_urls", []).append(evidence_entry)
+
+    return {
+        "status": "uploaded",
+        "url": public_url,
+        "type": evidence_type,
+        "path": storage_path,
+        "size_bytes": len(file_data),
+    }
+
+
 @router.post("/ping", response_model=LocationPingResponse)
 async def location_ping(request: LocationPingRequest):
+
     """
     Receive continuous location pings during an active alert.
     Every 30 seconds, the app sends updated GPS coordinates.
@@ -363,4 +437,5 @@ async def get_alert_status(alert_id: str):
         "location_pings": alert["location_pings"],
         "total_pings": len(alert["location_pings"]),
         "recipients": alert.get("recipients", []),
+        "evidence_urls": alert.get("evidence_urls", []),
     }
