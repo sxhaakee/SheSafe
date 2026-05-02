@@ -6,8 +6,9 @@ import {
   Animated, Alert, ActivityIndicator, StatusBar,
   KeyboardAvoidingView, Platform, SafeAreaView, Image, ScrollView
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { register } from '../../services/AuthService';
-import { AuthContext } from '../../../App';
+import { AuthContext } from '../../context/AuthContext';
 
 const ROLE_META = {
   victim:  { label: 'Personal Safety',  color: '#4F35D2', bg: '#EEE9FF' },
@@ -161,7 +162,7 @@ export default function SignupScreen({ navigation, route }) {
                 value={password} onChangeText={setPassword} secureTextEntry={!showPass}
                 onFocus={() => setFocused('pass')} onBlur={() => setFocused(null)} />
               <TouchableOpacity style={styles.eyeBtn} onPress={() => setShowPass(!showPass)}>
-                <Text style={styles.eyeIcon}>{showPass ? '🙈' : '👁️'}</Text>
+                <Ionicons name={showPass ? 'eye-off-outline' : 'eye-outline'} size={20} color="#6B7280" />
               </TouchableOpacity>
             </View>
 
@@ -174,7 +175,10 @@ export default function SignupScreen({ navigation, route }) {
             {role === 'victim' && (
               <>
                 <Text style={[styles.label, styles.mt16]}>4-Digit Safety PIN *</Text>
-                <Text style={styles.hint}>🔒 Used to cancel false alarms. Keep it private.</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 10 }}>
+                  <Ionicons name="lock-closed" size={14} color="#9CA3AF" style={{ marginRight: 6, marginTop: 2 }} />
+                  <Text style={[styles.hint, { marginBottom: 0 }]}>Used to cancel false alarms. Keep it private.</Text>
+                </View>
                 <TextInput style={inputStyle('pin')} placeholder="e.g. 1234" placeholderTextColor="#9CA3AF"
                   value={pin} onChangeText={(v) => setPin(v.replace(/\D/g, '').slice(0, 4))}
                   keyboardType="number-pad" maxLength={4} secureTextEntry
@@ -188,7 +192,10 @@ export default function SignupScreen({ navigation, route }) {
 
                 {/* ── Emergency Contacts ── */}
                 <Text style={[styles.sectionHeader, styles.mt24]}>EMERGENCY CONTACTS</Text>
-                <Text style={styles.hint}>📞 These people will be alerted in an emergency. Add 2 contacts.</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 10 }}>
+                  <Ionicons name="call" size={14} color="#9CA3AF" style={{ marginRight: 6, marginTop: 2 }} />
+                  <Text style={[styles.hint, { marginBottom: 0, flex: 1 }]}>These people will be alerted in an emergency. Add 2 contacts.</Text>
+                </View>
 
                 {/* Contact 1 */}
                 <View style={styles.contactCard}>

@@ -5,8 +5,9 @@ import {
   Animated, Alert, ActivityIndicator, StatusBar,
   KeyboardAvoidingView, Platform, SafeAreaView, Image, ScrollView
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { login } from '../../services/AuthService';
-import { AuthContext } from '../../../App';
+import { AuthContext } from '../../context/AuthContext';
 
 export default function LoginScreen({ navigation }) {
   const { onLogin } = useContext(AuthContext);
@@ -89,9 +90,13 @@ export default function LoginScreen({ navigation }) {
                 onPress={() => setShowPass(!showPass)}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
-                <Text style={styles.eyeIcon}>{showPass ? '🙈' : '👁️'}</Text>
+                <Ionicons name={showPass ? 'eye-off-outline' : 'eye-outline'} size={20} color="#6B7280" />
               </TouchableOpacity>
             </View>
+
+            <TouchableOpacity style={{ alignSelf: 'flex-end', marginTop: 12 }} onPress={() => navigation.navigate('ForgotPassword')}>
+              <Text style={{ color: '#4F35D2', fontWeight: '600', fontSize: 13 }}>Forgot Password?</Text>
+            </TouchableOpacity>
 
             {/* CTA */}
             <TouchableOpacity

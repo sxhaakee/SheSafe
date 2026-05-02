@@ -5,27 +5,30 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { StatusBar } from 'expo-status-bar';
+import { Ionicons } from '@expo/vector-icons';
 
 import { getStoredUser } from './src/services/AuthService';
+import { AuthContext } from './src/context/AuthContext';
 import WelcomeScreen from './src/screens/auth/WelcomeScreen';
 import LoginScreen from './src/screens/auth/LoginScreen';
 import SignupScreen from './src/screens/auth/SignupScreen';
+import ForgotPasswordScreen from './src/screens/auth/ForgotPasswordScreen';
 import VictimScreen from './src/screens/VictimScreen';
 import PoliceScreen from './src/screens/PoliceScreen';
 import ContactScreen from './src/screens/ContactScreen';
+import ProfileScreen from './src/screens/ProfileScreen';
 
 const AuthStack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 
-// ── Auth context so child screens can trigger login ────────────────────────
-export const AuthContext = React.createContext({ onLogin: () => {} });
-
+// AuthContext is in src/context/AuthContext.js
 function AuthNavigator() {
   return (
     <AuthStack.Navigator screenOptions={{ headerShown: false, animation: 'fade_from_bottom' }}>
       <AuthStack.Screen name="Welcome" component={WelcomeScreen} />
       <AuthStack.Screen name="Login" component={LoginScreen} />
       <AuthStack.Screen name="Signup" component={SignupScreen} />
+      <AuthStack.Screen name="ForgotPassword" component={ForgotPasswordScreen} options={{ animation: 'slide_from_right' }} />
     </AuthStack.Navigator>
   );
 }
@@ -39,7 +42,9 @@ function VictimTabs() {
       tabBarInactiveTintColor: '#9CA3AF',
     }}>
       <Tab.Screen name="Protection" component={VictimScreen}
-        options={{ tabBarIcon: ({ color }) => <Text style={{ fontSize: 20 }}>🛡️</Text>, tabBarLabel: 'Protect' }} />
+        options={{ tabBarIcon: ({ color }) => <Ionicons name="shield-checkmark" size={24} color={color} />, tabBarLabel: 'Protect' }} />
+      <Tab.Screen name="Profile" component={ProfileScreen}
+        options={{ tabBarIcon: ({ color }) => <Ionicons name="person" size={24} color={color} />, tabBarLabel: 'Profile' }} />
     </Tab.Navigator>
   );
 }
@@ -53,7 +58,9 @@ function PoliceTabs() {
       tabBarInactiveTintColor: '#9CA3AF',
     }}>
       <Tab.Screen name="Alerts" component={PoliceScreen}
-        options={{ tabBarIcon: () => <Text style={{ fontSize: 20 }}>🚨</Text>, tabBarLabel: 'Alerts' }} />
+        options={{ tabBarIcon: ({ color }) => <Ionicons name="warning" size={24} color={color} />, tabBarLabel: 'Alerts' }} />
+      <Tab.Screen name="Profile" component={ProfileScreen}
+        options={{ tabBarIcon: ({ color }) => <Ionicons name="person" size={24} color={color} />, tabBarLabel: 'Profile' }} />
     </Tab.Navigator>
   );
 }
@@ -67,7 +74,9 @@ function ContactTabs() {
       tabBarInactiveTintColor: '#9CA3AF',
     }}>
       <Tab.Screen name="Track" component={ContactScreen}
-        options={{ tabBarIcon: () => <Text style={{ fontSize: 20 }}>📍</Text>, tabBarLabel: 'Track' }} />
+        options={{ tabBarIcon: ({ color }) => <Ionicons name="location" size={24} color={color} />, tabBarLabel: 'Track' }} />
+      <Tab.Screen name="Profile" component={ProfileScreen}
+        options={{ tabBarIcon: ({ color }) => <Ionicons name="person" size={24} color={color} />, tabBarLabel: 'Profile' }} />
     </Tab.Navigator>
   );
 }

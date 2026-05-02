@@ -44,6 +44,16 @@ class VerifyPinRequest(BaseModel):
     phone: str
     pin: str
 
+class UpdateProfileRequest(BaseModel):
+    phone: str
+    name: str
+    email: str
+    emergency_contacts: list = []
+
+class ResetPasswordRequest(BaseModel):
+    phone: str
+    new_password: str
+
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -181,3 +191,52 @@ async def get_profile(phone: str):
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     return {k: v for k, v in user.items() if k not in ("password_hash", "pin_hash")}
+
+
+@router.post("/update-profile")
+async def update_profile(req: UpdateProfileRequest):
+    user = _users.get(req.phone)
+    if not user:
+        from core.supabase_client import get_user
+        user = get_user(req.phone)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    user["name"] = req.name
+    user["email"] = req.email
+    user["emergency_contacts"] = req.emergency_contacts
+    _users[req.phone] = user
+
+    import threading
+    from core.supabase_client import upsert_user
+    threading.Thread(target=upsert_user, args=({
+        **user,
+        "name": req.name,
+        "email": req.email,
+        "emergency_contacts": req.emergency_contacts,
+    },)).start()
+
+    return {"success": True, "message": "Profile updated successfully"}
+
+
+@router.post("/reset-password")
+async def reset_password(req: ResetPasswordRequest):
+    user = _users.get(req.phone)
+    if not user:
+        from core.supabase_client import get_user
+        user = get_user(req.phone)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    new_hash = _hash(req.new_password)
+    user["password_hash"] = new_hash
+    _users[req.phone] = user
+
+    import threading
+    from core.supabase_client import upsert_user
+    threading.Thread(target=upsert_user, args=({
+        **user,
+        "password_hash": new_hash,
+    },)).start()
+
+    return {"success": True, "message": "Password reset successfully"}

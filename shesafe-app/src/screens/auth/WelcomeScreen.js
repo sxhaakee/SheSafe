@@ -4,13 +4,14 @@ import {
   View, Text, StyleSheet, TouchableOpacity,
   Animated, StatusBar, Image, SafeAreaView, Dimensions
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
 const { width } = Dimensions.get('window');
 
 const ROLES = [
   {
     id: 'victim',
-    icon: '🛡️',
+    iconName: 'shield-checkmark',
     title: 'Personal Safety',
     subtitle: 'Active monitoring & SOS\nShake to trigger emergency alert',
     color: '#4F35D2',
@@ -19,7 +20,7 @@ const ROLES = [
   },
   {
     id: 'police',
-    icon: '🏛️',
+    iconName: 'business',
     title: 'Law Enforcement',
     subtitle: 'Alert dashboard\nReceive & respond to SOS calls',
     color: '#1D4ED8',
@@ -28,7 +29,7 @@ const ROLES = [
   },
   {
     id: 'contact',
-    icon: '🤝',
+    iconName: 'people',
     title: 'Trusted Guardian',
     subtitle: 'Track & support\nReceive real-time safety alerts',
     color: '#059669',
@@ -96,14 +97,14 @@ export default function WelcomeScreen({ navigation }) {
                 activeOpacity={0.82}
               >
                 <View style={[styles.iconBox, { backgroundColor: role.bg }]}>
-                  <Text style={styles.icon}>{role.icon}</Text>
+                  <Ionicons name={role.iconName} size={24} color={role.color} />
                 </View>
                 <View style={styles.cardBody}>
                   <Text style={[styles.cardTitle, { color: role.color }]}>{role.title}</Text>
                   <Text style={styles.cardSub}>{role.subtitle}</Text>
                 </View>
                 <View style={[styles.chevronBox, { backgroundColor: role.bg }]}>
-                  <Text style={[styles.chevron, { color: role.color }]}>›</Text>
+                  <Ionicons name="chevron-forward" size={18} color={role.color} />
                 </View>
               </TouchableOpacity>
             </Animated.View>

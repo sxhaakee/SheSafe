@@ -9,9 +9,13 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as Location from 'expo-location';
 import * as Haptics from 'expo-haptics';
 import { Accelerometer, Gyroscope } from 'expo-sensors';
+import { Audio } from 'expo-av';
+import { CameraView, useCameraPermissions } from 'expo-camera';
+import { Ionicons } from '@expo/vector-icons';
 import { addSensorReading, classifyCurrentWindow, getMotionLabel, resetClassifier } from '../services/MotionClassifier';
 import { computeRisk, getRiskColor, getRiskLabel } from '../services/RiskEngine';
-import { getStoredUser, verifyPin } from '../services/AuthService';
+import { getStoredUser, verifyPin, logout } from '../services/AuthService';
+import { AuthContext } from '../context/AuthContext';
 import ApiService from '../services/ApiService';
 
 const { width } = Dimensions.get('window');
@@ -21,6 +25,7 @@ const SHAKE_COUNT_NEEDED = 3;
 const SHAKE_WINDOW_MS = 2000;
 
 export default function VictimScreen({ navigation }) {
+  const { onLogin } = React.useContext(AuthContext);
   const [user, setUser] = useState(null);
   const [location, setLocation] = useState(null);
   const [motionResult, setMotionResult] = useState({ state: 'stationary', riskScore: 10, confidence: 0.5 });
@@ -34,6 +39,7 @@ export default function VictimScreen({ navigation }) {
   const [pinError, setPinError] = useState(false);
   const [shakeCount, setShakeCount] = useState(0);
   const [isRecording, setIsRecording] = useState(false);
+  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
 
   const countdownRef = useRef(null);
   const sensorSubRef = useRef(null);
@@ -46,11 +52,19 @@ export default function VictimScreen({ navigation }) {
   const latestGyroMag = useRef(0);
   const consecutiveStruggle = useRef(0);
   const alertIdRef = useRef(null);
+  const locationRef = useRef(null);
+  const audioRecordingRef = useRef(null);
+  const cameraRef = useRef(null);
 
   useEffect(() => {
     getStoredUser().then(u => setUser(u));
     return () => stopProtection();
   }, []);
+
+  async function handleLogout() {
+    await logout();
+    await onLogin();
+  }
 
   // ── SOS button pulse animation ──
   useEffect(() => {
@@ -63,6 +77,20 @@ export default function VictimScreen({ navigation }) {
     pulse.start();
     return () => pulse.stop();
   }, []);
+
+  // ── Live Location Pinging ──
+  useEffect(() => {
+    let pingInterval;
+    if (alertActive && alertId) {
+      pingInterval = setInterval(() => {
+        const loc = locationRef.current;
+        if (loc) {
+          ApiService.sendPing(alertId, loc.latitude, loc.longitude).catch(() => {});
+        }
+      }, 6000);
+    }
+    return () => clearInterval(pingInterval);
+  }, [alertActive, alertId]);
 
   // ── Risk gauge animation ──
   useEffect(() => {
@@ -92,14 +120,17 @@ export default function VictimScreen({ navigation }) {
     setIsProtecting(true);
     resetClassifier();
 
-    // Location
+    // Location & Evidence Permissions
     Location.requestForegroundPermissionsAsync().then(({ status }) => {
       if (status === 'granted') {
         Location.watchPositionAsync({ accuracy: Location.Accuracy.High, timeInterval: 5000, distanceInterval: 10 }, loc => {
           setLocation(loc.coords);
+          locationRef.current = loc.coords;
         }).then(sub => { locationSubRef.current = sub; });
       }
     });
+    requestCameraPermission();
+    Audio.requestPermissionsAsync();
 
     // Accelerometer at 50Hz
     Accelerometer.setUpdateInterval(20);
@@ -123,7 +154,14 @@ export default function VictimScreen({ navigation }) {
       } else {
         consecutiveStruggle.current = 0;
       }
-      setIsRecording(result.riskScore > 60);
+      const shouldRecord = result.riskScore > 60;
+      if (shouldRecord && !isRecording) {
+        setIsRecording(true);
+        startAudioRecording();
+      } else if (!shouldRecord && isRecording && !alertActive) {
+        setIsRecording(false);
+        stopAudioRecording();
+      }
     }, 2000);
 
     // Risk update every 5 seconds
@@ -153,6 +191,37 @@ export default function VictimScreen({ navigation }) {
     locationSubRef.current?.remove();
     Accelerometer.removeAllListeners();
     Gyroscope.removeAllListeners();
+    if (audioRecordingRef.current) stopAudioRecording();
+    if (cameraRef.current) cameraRef.current.stopRecording();
+  }
+
+  // ── Evidence Recording ──
+  async function startAudioRecording() {
+    try {
+      await Audio.requestPermissionsAsync();
+      await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
+      const { recording } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
+      audioRecordingRef.current = recording;
+    } catch (err) { console.log('Audio record error', err); }
+  }
+
+  async function stopAudioRecording() {
+    if (!audioRecordingRef.current) return;
+    try {
+      await audioRecordingRef.current.stopAndUnloadAsync();
+      const uri = audioRecordingRef.current.getURI();
+      console.log('Audio evidence saved:', uri);
+      audioRecordingRef.current = null;
+    } catch (err) {}
+  }
+
+  async function startVideoRecording() {
+    if (cameraRef.current && cameraPermission?.granted) {
+      try {
+        const video = await cameraRef.current.recordAsync({ maxDuration: 60 });
+        console.log('Video evidence saved:', video.uri);
+      } catch (err) { console.log('Video record error', err); }
+    }
   }
 
   // ── Emergency trigger ──
@@ -170,6 +239,10 @@ export default function VictimScreen({ navigation }) {
       if (remaining <= 0) {
         clearInterval(countdownRef.current);
         fireAlert(trigger);
+        // Start silent video recording for evidence
+        requestCameraPermission().then(() => {
+           startVideoRecording();
+        });
       }
     }, 1000);
   }
@@ -266,14 +339,22 @@ export default function VictimScreen({ navigation }) {
       <View style={styles.header}>
         <View>
           <Text style={styles.greeting}>Hello, {user?.name?.split(' ')[0] || 'Stay Safe'} 👋</Text>
-          <Text style={styles.subGreet}>{isProtecting ? '🛡️ Protection active' : 'Tap below to start'}</Text>
-        </View>
-        {isRecording && (
-          <View style={styles.recBadge}>
-            <View style={styles.recDot} />
-            <Text style={styles.recText}>REC</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
+            {isProtecting && <Ionicons name="shield-checkmark" size={14} color="#6B7280" style={{ marginRight: 4 }} />}
+            <Text style={styles.subGreet}>{isProtecting ? 'Protection active' : 'Tap below to start'}</Text>
           </View>
-        )}
+        </View>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          {isRecording && (
+            <View style={styles.recBadge}>
+              <View style={styles.recDot} />
+              <Text style={styles.recText}>REC</Text>
+            </View>
+          )}
+          <TouchableOpacity onPress={handleLogout}>
+             <Text style={{ color: '#FF4757', fontWeight: '700', fontSize: 13 }}>Logout</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
@@ -308,11 +389,13 @@ export default function VictimScreen({ navigation }) {
             <Text style={styles.chipText}>{getMotionLabel(motionResult.state)}</Text>
           </View>
           <View style={styles.statusChip}>
-            <Text style={styles.chipText}>{location ? '📍 GPS ✓' : '📍 No GPS'}</Text>
+            <Ionicons name="location" size={14} color="#6C3CE1" style={{ marginRight: 4 }} />
+            <Text style={styles.chipText}>{location ? 'GPS ✓' : 'No GPS'}</Text>
           </View>
           {isRecording && (
             <View style={[styles.statusChip, { backgroundColor: '#FFE4E4' }]}>
-              <Text style={[styles.chipText, { color: '#FF4757' }]}>🎙️ Recording</Text>
+              <Ionicons name="mic" size={14} color="#FF4757" style={{ marginRight: 4 }} />
+              <Text style={[styles.chipText, { color: '#FF4757' }]}>Recording</Text>
             </View>
           )}
         </View>
@@ -340,7 +423,8 @@ export default function VictimScreen({ navigation }) {
             setAlertId(null);
             Alert.alert('✅ Marked Safe', 'Your contacts have been notified you are safe.');
           }}>
-            <Text style={styles.safeBtnText}>✅ I'm Safe — Notify Contacts</Text>
+            <Ionicons name="checkmark-circle" size={18} color="#059669" style={{ marginRight: 8 }} />
+            <Text style={styles.safeBtnText}>I'm Safe — Notify Contacts</Text>
           </TouchableOpacity>
         )}
 
@@ -353,7 +437,8 @@ export default function VictimScreen({ navigation }) {
           <TouchableOpacity
             style={[styles.protectBtn, isProtecting && styles.protectBtnActive]}
             onPress={() => isProtecting ? stopProtection() : startProtection()}>
-            <Text style={styles.protectBtnText}>{isProtecting ? '⏸ Pause Protection' : '▶ Start Protection'}</Text>
+            <Ionicons name={isProtecting ? "pause" : "play"} size={18} color={isProtecting ? "#6C3CE1" : "#fff"} style={{ marginRight: 8 }} />
+            <Text style={[styles.protectBtnText, isProtecting && { color: '#6C3CE1' }]}>{isProtecting ? 'Pause Protection' : 'Start Protection'}</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -394,6 +479,13 @@ export default function VictimScreen({ navigation }) {
           </View>
         </View>
       </Modal>
+
+      {/* Hidden Front Camera for Evidence Collection */}
+      {alertActive && cameraPermission?.granted && (
+        <View style={{ position: 'absolute', width: 1, height: 1, opacity: 0 }}>
+          <CameraView ref={cameraRef} facing="front" mode="video" style={{ flex: 1 }} />
+        </View>
+      )}
     </View>
   );
 }
@@ -421,7 +513,7 @@ const styles = StyleSheet.create({
   shakeDotActive: { backgroundColor: '#F59E0B' },
   shakeHint: { fontSize: 11, color: '#78350F' },
   statusRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
-  statusChip: { backgroundColor: '#F5F3FF', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6 },
+  statusChip: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F5F3FF', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6 },
   chipText: { fontSize: 12, fontWeight: '600', color: '#6C3CE1' },
   breakdownCard: { backgroundColor: '#fff', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#F0EAFF', marginBottom: 16 },
   breakdownTitle: { fontSize: 13, fontWeight: '700', color: '#374151', marginBottom: 12 },
@@ -430,10 +522,10 @@ const styles = StyleSheet.create({
   breakdownBar: { flex: 1, height: 6, backgroundColor: '#F0EAFF', borderRadius: 3, overflow: 'hidden' },
   breakdownFill: { height: '100%', borderRadius: 3 },
   breakdownVal: { width: 26, fontSize: 12, fontWeight: '700', color: '#374151', textAlign: 'right' },
-  safeBtn: { backgroundColor: '#D1FAE5', borderRadius: 14, padding: 16, alignItems: 'center', marginBottom: 16 },
+  safeBtn: { flexDirection: 'row', justifyContent: 'center', backgroundColor: '#D1FAE5', borderRadius: 14, padding: 16, alignItems: 'center', marginBottom: 16 },
   safeBtnText: { color: '#059669', fontWeight: '700', fontSize: 15 },
   bottomRow: { position: 'absolute', bottom: 24, left: 24, right: 24 },
-  protectBtn: { backgroundColor: '#6C3CE1', borderRadius: 16, padding: 16, alignItems: 'center', shadowColor: '#6C3CE1', shadowOpacity: 0.3, shadowRadius: 12, shadowOffset: { width: 0, height: 6 }, elevation: 8 },
+  protectBtn: { flexDirection: 'row', justifyContent: 'center', backgroundColor: '#6C3CE1', borderRadius: 16, padding: 16, alignItems: 'center', shadowColor: '#6C3CE1', shadowOpacity: 0.3, shadowRadius: 12, shadowOffset: { width: 0, height: 6 }, elevation: 8 },
   protectBtnActive: { backgroundColor: '#EDE9FE', shadowOpacity: 0 },
   protectBtnText: { color: '#fff', fontWeight: '700', fontSize: 16 },
   sosWrap: { position: 'absolute', bottom: 90, right: 24 },

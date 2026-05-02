@@ -2,12 +2,16 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Linking, RefreshControl, ScrollView, StatusBar, Animated } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { getStoredUser } from '../services/AuthService';
+import MapView, { Marker, Polyline } from 'react-native-maps';
+import { Ionicons } from '@expo/vector-icons';
+import { getStoredUser, logout } from '../services/AuthService';
+import { AuthContext } from '../context/AuthContext';
 import ApiService from '../services/ApiService';
 
 const POLL_MS = 8000;
 
 export default function ContactScreen() {
+  const { onLogin } = React.useContext(AuthContext);
   const [user, setUser] = useState(null);
   const [activeAlert, setActiveAlert] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -23,6 +27,11 @@ export default function ContactScreen() {
     pollRef.current = setInterval(fetchAlerts, POLL_MS);
     return () => clearInterval(pollRef.current);
   }, []);
+
+  async function handleLogout() {
+    await logout();
+    await onLogin();
+  }
 
   useEffect(() => {
     if (activeAlert) {
@@ -89,9 +98,17 @@ export default function ContactScreen() {
       <StatusBar barStyle="dark-content" backgroundColor="#fff" />
       <LinearGradient colors={['#F0FDF4', '#FFFFFF']} style={StyleSheet.absoluteFillObject} />
 
-      <View style={styles.header}>
-        <Text style={styles.title}>👨‍👩‍👧 Safety Dashboard</Text>
-        <Text style={styles.subtitle}>{user?.name ? `Logged in as ${user.name}` : 'Trusted Contact'}</Text>
+      <View style={[styles.header, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}>
+        <View>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Ionicons name="people" size={20} color="#1A1A2E" style={{ marginRight: 6 }} />
+            <Text style={styles.title}>Safety Dashboard</Text>
+          </View>
+          <Text style={styles.subtitle}>{user?.name ? `Logged in as ${user.name}` : 'Trusted Contact'}</Text>
+        </View>
+        <TouchableOpacity onPress={handleLogout}>
+          <Text style={{ color: '#FF4757', fontWeight: '700', fontSize: 13 }}>Logout</Text>
+        </TouchableOpacity>
       </View>
 
       <ScrollView
@@ -105,7 +122,10 @@ export default function ContactScreen() {
             <Animated.View style={[styles.alertBanner, { borderColor: riskColor(activeAlert.risk_score) + '60', transform: [{ scale: pulseAnim }] }]}>
               <LinearGradient colors={[riskColor(activeAlert.risk_score) + '15', riskColor(activeAlert.risk_score) + '05']} style={StyleSheet.absoluteFillObject} borderRadius={18} />
               <View style={styles.alertBannerTop}>
-                <Text style={styles.alertBannerTitle}>⚠️ Emergency Alert Active</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <Ionicons name="warning" size={14} color="#1A1A2E" style={{ marginRight: 4 }} />
+                  <Text style={styles.alertBannerTitle}>Emergency Alert Active</Text>
+                </View>
                 <View style={[styles.riskPill, { backgroundColor: riskColor(activeAlert.risk_score) }]}>
                   <Text style={styles.riskPillText}>{activeAlert.risk_score}</Text>
                 </View>
@@ -114,32 +134,57 @@ export default function ContactScreen() {
               <Text style={styles.alertTime}>Triggered {timeSince(activeAlert.timestamp)} • {activeAlert.trigger_type?.replace('_', ' ').toUpperCase()}</Text>
             </Animated.View>
 
-            {/* Location card */}
-            <View style={styles.locationCard}>
-              <Text style={styles.cardTitle}>📍 Last Known Location</Text>
-              <Text style={styles.locationAddr}>{activeAlert.address || 'Location available on map'}</Text>
-              <Text style={styles.locationCoords}>{activeAlert.lat?.toFixed(5)}°N, {activeAlert.lng?.toFixed(5)}°E</Text>
-              {lastPing && <Text style={styles.locationUpdate}>Last update: {timeSince(lastPing.timestamp)}</Text>}
-              <Text style={styles.pingCount}>📡 {activeAlert.total_pings || 0} location pings received</Text>
+            {/* Location Map */}
+            <View style={styles.mapContainer}>
+              <MapView
+                style={StyleSheet.absoluteFillObject}
+                region={{
+                  latitude: activeAlert.lat || 12.9716,
+                  longitude: activeAlert.lng || 77.5946,
+                  latitudeDelta: 0.05,
+                  longitudeDelta: 0.05,
+                }}
+              >
+                {activeAlert.location_pings && activeAlert.location_pings.length > 0 && (
+                  <Polyline 
+                    coordinates={activeAlert.location_pings.map(p => ({ latitude: p.lat, longitude: p.lng }))}
+                    strokeColor={riskColor(activeAlert.risk_score)}
+                    strokeWidth={4}
+                  />
+                )}
+                <Marker coordinate={{ latitude: activeAlert.lat, longitude: activeAlert.lng }}>
+                  <View style={{ alignItems: 'center', justifyContent: 'center', width: 40, height: 40 }}>
+                    <Animated.View style={[styles.markerPulse, { transform: [{ scale: pulseAnim }], backgroundColor: riskColor(activeAlert.risk_score) + '60' }]} />
+                    <View style={[styles.markerCore, { backgroundColor: riskColor(activeAlert.risk_score) }]} />
+                  </View>
+                </Marker>
+              </MapView>
+              <View style={styles.mapOverlay}>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <Ionicons name="location" size={14} color="#1A1A2E" style={{ marginRight: 4 }} />
+                  <Text style={styles.mapOverlayTitle}>Tracking Active ({activeAlert.total_pings || 0} pings)</Text>
+                </View>
+                {lastPing && <Text style={styles.mapOverlaySub}>Last update: {timeSince(lastPing.timestamp)}</Text>}
+              </View>
             </View>
 
             {/* Action buttons */}
             <View style={styles.actionsGrid}>
               <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#059669' }]}
                 onPress={() => Linking.openURL(`tel:${activeAlert.user_phone}`)}>
-                <Text style={styles.actionIcon}>📞</Text>
+                <Ionicons name="call" size={24} color="#fff" />
                 <Text style={styles.actionText}>Call {activeAlert.user_name?.split(' ')[0]}</Text>
               </TouchableOpacity>
 
               <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#1D4ED8' }]}
                 onPress={() => Linking.openURL(activeAlert.maps_link || `https://maps.google.com/?q=${activeAlert.lat},${activeAlert.lng}`)}>
-                <Text style={styles.actionIcon}>🗺️</Text>
+                <Ionicons name="navigate" size={24} color="#fff" />
                 <Text style={styles.actionText}>Open Maps</Text>
               </TouchableOpacity>
 
               <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#DC2626' }]}
                 onPress={() => Linking.openURL('tel:100')}>
-                <Text style={styles.actionIcon}>🚨</Text>
+                <Ionicons name="alert-circle" size={24} color="#fff" />
                 <Text style={styles.actionText}>Call Police</Text>
               </TouchableOpacity>
 
@@ -148,25 +193,27 @@ export default function ContactScreen() {
                   const msg = `SHESAFE SOS: ${activeAlert.user_name} needs help!\nLocation: ${activeAlert.address}\nMaps: ${activeAlert.maps_link}`;
                   Linking.openURL(`whatsapp://send?text=${encodeURIComponent(msg)}`);
                 }}>
-                <Text style={styles.actionIcon}>💬</Text>
+                <Ionicons name="chatbubble-ellipses" size={24} color="#fff" />
                 <Text style={styles.actionText}>Share Alert</Text>
               </TouchableOpacity>
             </View>
 
             {activeAlert.is_safe && (
               <View style={styles.safeConfirmed}>
-                <Text style={styles.safeConfirmedText}>✅ {activeAlert.user_name} has confirmed she is safe</Text>
+                <Ionicons name="checkmark-circle" size={16} color="#059669" style={{ marginRight: 6 }} />
+                <Text style={styles.safeConfirmedText}>{activeAlert.user_name} has confirmed she is safe</Text>
               </View>
             )}
           </>
         ) : (
           <View style={styles.empty}>
-            <Text style={styles.emptyIcon}>✅</Text>
+            <Ionicons name="shield-checkmark" size={64} color="#10B981" style={{ marginBottom: 16 }} />
             <Text style={styles.emptyTitle}>All Safe</Text>
             <Text style={styles.emptyText}>No active alerts. Your loved one is safe.</Text>
             <Text style={styles.emptyHint}>Pull down to refresh</Text>
             <TouchableOpacity style={styles.demoBtn} onPress={simulateAlert}>
-              <Text style={styles.demoBtnText}>▶ Simulate Alert (Demo)</Text>
+              <Ionicons name="play" size={14} color="#fff" style={{ marginRight: 6 }} />
+              <Text style={styles.demoBtnText}>Simulate Alert (Demo)</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -198,13 +245,18 @@ const styles = StyleSheet.create({
   actionBtn: { width: '47%', borderRadius: 14, padding: 16, alignItems: 'center', gap: 6 },
   actionIcon: { fontSize: 24 },
   actionText: { color: '#fff', fontWeight: '700', fontSize: 13, textAlign: 'center' },
-  safeConfirmed: { backgroundColor: '#D1FAE5', borderRadius: 14, padding: 14, alignItems: 'center' },
+  safeConfirmed: { flexDirection: 'row', justifyContent: 'center', backgroundColor: '#D1FAE5', borderRadius: 14, padding: 14, alignItems: 'center' },
   safeConfirmedText: { color: '#059669', fontWeight: '700', fontSize: 14 },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 80 },
-  emptyIcon: { fontSize: 64, marginBottom: 16 },
   emptyTitle: { fontSize: 24, fontWeight: '800', color: '#1A1A2E' },
   emptyText: { fontSize: 14, color: '#6B7280', textAlign: 'center', marginTop: 6 },
   emptyHint: { fontSize: 12, color: '#9CA3AF', marginTop: 8 },
-  demoBtn: { marginTop: 24, backgroundColor: '#059669', borderRadius: 14, paddingHorizontal: 24, paddingVertical: 14 },
+  demoBtn: { flexDirection: 'row', alignItems: 'center', marginTop: 24, backgroundColor: '#059669', borderRadius: 14, paddingHorizontal: 24, paddingVertical: 14 },
   demoBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
+  mapContainer: { height: 250, borderRadius: 20, overflow: 'hidden', marginBottom: 16, borderWidth: 2, borderColor: '#D1FAE5', shadowColor: '#059669', shadowOpacity: 0.15, shadowRadius: 15, elevation: 5 },
+  mapOverlay: { position: 'absolute', bottom: 12, left: 12, right: 12, backgroundColor: 'rgba(255,255,255,0.95)', borderRadius: 12, padding: 12, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 5 },
+  mapOverlayTitle: { fontWeight: '800', color: '#1A1A2E', fontSize: 13 },
+  mapOverlaySub: { color: '#059669', fontSize: 11, marginTop: 2, fontWeight: '700' },
+  markerPulse: { position: 'absolute', width: 40, height: 40, borderRadius: 20 },
+  markerCore: { width: 16, height: 16, borderRadius: 8, borderWidth: 3, borderColor: '#fff' },
 });

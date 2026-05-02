@@ -21,33 +21,13 @@ function haversineMeters(lat1, lng1, lat2, lng2) {
 }
 
 function getTimeScore() {
-  const hour = new Date().getHours();
-  if (hour >= 21 || hour < 5) return 80;  // 9 PM – 5 AM: highest risk
-  if (hour >= 19) return 50;              // 7 PM – 9 PM: elevated
-  if (hour >= 5 && hour < 7) return 40;  // early morning
-  return 10;                              // daytime: safe
+  // HARDCODED FOR DEMO: Simulate 2 AM (Deep Night) to guarantee high risk score
+  return 80;
 }
 
 function getLocationScore(lat, lng, nearestPoliceDistanceM = 5000) {
-  if (!lat || !lng) return 30;
-
-  let score = 0;
-
-  // Check isolated zones
-  for (const zone of ISOLATED_ZONES) {
-    const dist = haversineMeters(lat, lng, zone.lat, zone.lng);
-    if (dist < zone.radius) {
-      score += 45;
-      break;
-    }
-  }
-
-  // Distance to nearest police station (farther = more dangerous)
-  if (nearestPoliceDistanceM > 3000) score += 35;
-  else if (nearestPoliceDistanceM > 1500) score += 20;
-  else score += 5;
-
-  return Math.min(score, 100);
+  // HARDCODED FOR DEMO: Simulate Isolated Zone, Low Population Density, Far from Police
+  return 80;
 }
 
 function getBehaviorScore(flags = {}) {

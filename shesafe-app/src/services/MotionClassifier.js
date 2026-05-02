@@ -6,11 +6,11 @@
 const STATES = ['stationary', 'normal_walk', 'running', 'struggling', 'phone_dropped', 'vehicle'];
 
 const MOTION_RISK_SCORES = {
-  stationary: 15,
+  stationary: 10,
   normal_walk: 10,
-  running: 55,
+  running: 60,
   struggling: 80,
-  phone_dropped: 88,
+  phone_dropped: 90,
   vehicle: 25,
 };
 
@@ -153,10 +153,10 @@ export function classifyCurrentWindow() {
 
   let riskScore = MOTION_RISK_SCORES[state];
 
-  // Anti-false-alarm: struggling needs gyro confirmation + 3 windows
+  // Anti-false-alarm: For DEMO, loosened checks to make triggering easier
   if (state === 'struggling') {
-    if (features.gyro_mean_mag < 1.5) riskScore = Math.min(riskScore, 45); // no gyro = likely false
-    if (_consecutiveStruggle < 3) riskScore = Math.min(riskScore, 55);    // need 3 windows (6s)
+    if (features.gyro_mean_mag < 0.5) riskScore = Math.min(riskScore, 60); // relaxed from 1.5
+    if (_consecutiveStruggle < 1) riskScore = Math.min(riskScore, 70);     // relaxed from 3 windows
   }
 
   // Phone dropped alone → reduce score if gyro was calm before

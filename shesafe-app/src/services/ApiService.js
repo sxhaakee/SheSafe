@@ -83,6 +83,8 @@ const ApiService = {
   register: (body) => post('/auth/register', body),
   login: (body) => post('/auth/login', body),
   verifyPin: (phone, pin) => post('/auth/verify-pin', { phone, pin }),
+  updateProfile: (body) => post('/auth/update-profile', body),
+  resetPassword: (body) => post('/auth/reset-password', body),
 };
 
 export default ApiService;
