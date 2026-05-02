@@ -175,19 +175,23 @@ export default function PoliceScreen() {
 
   async function playSiren() {
     try {
-      if (sirenRef.current) return; // already playing
+      if (sirenRef.current) return;
       await Audio.setAudioModeAsync({
         playsInSilentModeIOS: true,
         staysActiveInBackground: true,
         shouldDuckAndroid: false,
+        allowsRecordingIOS: false,
       });
+      // Use a reliable public emergency tone (Google's public sound library)
       const { sound } = await Audio.Sound.createAsync(
-        { uri: 'https://www.soundjay.com/misc/sounds/emergency-alarm-1.mp3' },
+        { uri: 'https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg' },
         { shouldPlay: true, isLooping: true, volume: 1.0 }
       );
       sirenRef.current = sound;
     } catch (e) {
-      console.log('Siren error:', e.message);
+      console.log('Siren audio failed, using vibration only:', e.message);
+      // Vibration is already running as fallback — no crash
+      sirenRef.current = null;
     }
   }
 

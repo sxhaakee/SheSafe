@@ -43,13 +43,16 @@ export default function ContactScreen() {
   async function playSiren() {
     try {
       if (sirenRef.current) return;
-      await Audio.setAudioModeAsync({ playsInSilentModeIOS: true, staysActiveInBackground: true, shouldDuckAndroid: false });
+      await Audio.setAudioModeAsync({ playsInSilentModeIOS: true, staysActiveInBackground: true, shouldDuckAndroid: false, allowsRecordingIOS: false });
       const { sound } = await Audio.Sound.createAsync(
-        { uri: 'https://www.soundjay.com/misc/sounds/emergency-alarm-1.mp3' },
+        { uri: 'https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg' },
         { shouldPlay: true, isLooping: true, volume: 1.0 }
       );
       sirenRef.current = sound;
-    } catch (e) { console.log('Siren error:', e.message); }
+    } catch (e) {
+      console.log('Siren audio failed, using vibration only:', e.message);
+      sirenRef.current = null;
+    }
   }
 
   async function stopSiren() {

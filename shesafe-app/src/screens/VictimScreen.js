@@ -20,7 +20,7 @@ import ApiService from '../services/ApiService';
 import { uploadEvidence } from '../services/EvidenceService';
 
 const { width } = Dimensions.get('window');
-const COUNTDOWN = 45;  // 45-second countdown before alert fires
+const COUNTDOWN = 30;  // 30-second countdown before alert fires
 const SHAKE_THRESHOLD = 18;
 const SHAKE_COUNT_NEEDED = 3;
 const SHAKE_WINDOW_MS = 2000;
@@ -56,6 +56,7 @@ export default function VictimScreen({ navigation }) {
   const locationRef = useRef(null);
   const audioRecordingRef = useRef(null);
   const cameraRef = useRef(null);
+  const pingIntervalRef = useRef(null);
 
   useEffect(() => {
     getStoredUser().then(u => setUser(u));
@@ -194,6 +195,7 @@ export default function VictimScreen({ navigation }) {
     locationSubRef.current?.remove();
     Accelerometer.removeAllListeners();
     Gyroscope.removeAllListeners();
+    stopLocationPings();
     if (audioRecordingRef.current) stopAudioRecording();
     if (cameraRef.current) cameraRef.current.stopRecording();
   }
@@ -247,7 +249,7 @@ export default function VictimScreen({ navigation }) {
     if (alertActive) return;
     setAlertActive(true);
     setCountdown(COUNTDOWN);
-    setShowPinModal(false);
+    // Do NOT hide pin modal here — user needs it to cancel!
     Vibration.vibrate([0, 400, 200, 400, 200, 400]);
 
     let remaining = COUNTDOWN;
@@ -268,7 +270,6 @@ export default function VictimScreen({ navigation }) {
   async function fireAlert(trigger) {
     try {
       const contacts = user?.emergency_contacts || [];
-      // Demo police stations — replace with dynamic lookup in production
       const demoStations = [
         { name: 'Koramangala Police Station', phone: '+918022951000' },
         { name: 'HSR Layout Police Station',  phone: '+918022571060' },
@@ -286,10 +287,37 @@ export default function VictimScreen({ navigation }) {
         trusted_contacts: contacts.map(c => ({ name: c.name || 'Contact', phone: c.phone || '', relation: c.relation || 'Contact' })),
         nearest_stations: demoStations,
       });
-      alertIdRef.current = res.alert_id;
-      setAlertId(res.alert_id);
+      if (res?.alert_id) {
+        alertIdRef.current = res.alert_id;
+        setAlertId(res.alert_id);
+        // Start sending location pings every 15 seconds
+        startLocationPings(res.alert_id);
+      }
     } catch (e) {
       console.log('Alert fire failed, continuing offline:', e.message);
+    }
+  }
+
+  function startLocationPings(aid) {
+    if (pingIntervalRef.current) clearInterval(pingIntervalRef.current);
+    // Send first ping immediately
+    sendLocationPing(aid);
+    pingIntervalRef.current = setInterval(() => sendLocationPing(aid), 15000);
+  }
+
+  async function sendLocationPing(aid) {
+    try {
+      const loc = locationRef.current || location;
+      if (loc && aid) {
+        await ApiService.sendPing(aid, loc.latitude || 12.9340, loc.longitude || 77.6210);
+      }
+    } catch {}
+  }
+
+  function stopLocationPings() {
+    if (pingIntervalRef.current) {
+      clearInterval(pingIntervalRef.current);
+      pingIntervalRef.current = null;
     }
   }
 
@@ -320,6 +348,9 @@ export default function VictimScreen({ navigation }) {
     setPin('');
     setPinError(false);
     setCountdown(COUNTDOWN);
+    stopLocationPings();
+    stopAudioRecording();
+    if (cameraRef.current) cameraRef.current.stopRecording();
     if (alertIdRef.current) {
       ApiService.confirmSafe(alertIdRef.current).catch(() => {});
       alertIdRef.current = null;
