@@ -40,26 +40,12 @@ export default function ContactScreen() {
     await onLogin();
   }
 
-  async function playSiren() {
-    try {
-      if (sirenRef.current) return;
-      await Audio.setAudioModeAsync({ playsInSilentModeIOS: true, staysActiveInBackground: true, shouldDuckAndroid: false, allowsRecordingIOS: false });
-      const { sound } = await Audio.Sound.createAsync(
-        { uri: 'https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg' },
-        { shouldPlay: true, isLooping: true, volume: 1.0 }
-      );
-      sirenRef.current = sound;
-    } catch (e) {
-      console.log('Siren audio failed, using vibration only:', e.message);
-      sirenRef.current = null;
-    }
+  function playSiren() {
+    sirenRef.current = true;
   }
 
-  async function stopSiren() {
-    if (sirenRef.current) {
-      try { await sirenRef.current.stopAsync(); await sirenRef.current.unloadAsync(); } catch {}
-      sirenRef.current = null;
-    }
+  function stopSiren() {
+    sirenRef.current = null;
   }
 
   useEffect(() => {

@@ -8,7 +8,6 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import MapView, { Marker, Callout, PROVIDER_DEFAULT } from 'react-native-maps';
 import { Ionicons } from '@expo/vector-icons';
-import { Audio } from 'expo-av';
 import { getStoredUser, logout } from '../services/AuthService';
 import { AuthContext } from '../context/AuthContext';
 import ApiService from '../services/ApiService';
@@ -155,7 +154,6 @@ export default function PoliceScreen() {
     getStoredUser().then(setUser);
     fetchAlerts();
     pollRef.current = setInterval(fetchAlerts, POLL_MS);
-    Audio.requestPermissionsAsync();
 
     const pulse = Animated.loop(
       Animated.sequence([
@@ -173,36 +171,14 @@ export default function PoliceScreen() {
     };
   }, []);
 
-  async function playSiren() {
-    try {
-      if (sirenRef.current) return;
-      await Audio.setAudioModeAsync({
-        playsInSilentModeIOS: true,
-        staysActiveInBackground: true,
-        shouldDuckAndroid: false,
-        allowsRecordingIOS: false,
-      });
-      // Use a reliable public emergency tone (Google's public sound library)
-      const { sound } = await Audio.Sound.createAsync(
-        { uri: 'https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg' },
-        { shouldPlay: true, isLooping: true, volume: 1.0 }
-      );
-      sirenRef.current = sound;
-    } catch (e) {
-      console.log('Siren audio failed, using vibration only:', e.message);
-      // Vibration is already running as fallback — no crash
-      sirenRef.current = null;
-    }
+  // Siren = aggressive vibration pattern. No external URL = no crash, no network needed.
+  function playSiren() {
+    // Vibration is already started in fetchAlerts — this just marks state
+    sirenRef.current = true;
   }
 
-  async function stopSiren() {
-    if (sirenRef.current) {
-      try {
-        await sirenRef.current.stopAsync();
-        await sirenRef.current.unloadAsync();
-      } catch {}
-      sirenRef.current = null;
-    }
+  function stopSiren() {
+    sirenRef.current = null;
   }
 
   async function handleLogout() {
