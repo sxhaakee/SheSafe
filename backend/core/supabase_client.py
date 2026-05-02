@@ -1,6 +1,6 @@
 """
 SHESAFE Backend — Supabase database client
-Replaces Firebase with Supabase (PostgreSQL).
+All user and alert persistence goes through here.
 """
 import os
 from typing import Optional
@@ -12,7 +12,7 @@ _client = None
 
 
 def get_supabase():
-    """Lazy-init Supabase client."""
+    """Lazy-initialise the Supabase client. Returns None if not configured."""
     global _client
     if _client is not None:
         return _client
@@ -29,10 +29,11 @@ def get_supabase():
 
 
 def is_configured() -> bool:
+    """Returns True if Supabase credentials are present in the environment."""
     return bool(SUPABASE_URL and SUPABASE_SERVICE_KEY)
 
 
-# ── Users ──────────────────────────────────────────────────────────────────
+# ── Users ──────────────────────────────────────────────────────────────────────
 
 def upsert_user(user: dict) -> bool:
     db = get_supabase()
@@ -57,7 +58,7 @@ def get_user(phone: str) -> Optional[dict]:
         return None
 
 
-# ── Alerts ────────────────────────────────────────────────────────────────
+# ── Alerts ─────────────────────────────────────────────────────────────────────
 
 def insert_alert(alert: dict) -> bool:
     db = get_supabase()

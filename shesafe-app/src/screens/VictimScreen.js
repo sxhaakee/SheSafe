@@ -19,7 +19,7 @@ import { AuthContext } from '../context/AuthContext';
 import ApiService from '../services/ApiService';
 
 const { width } = Dimensions.get('window');
-const COUNTDOWN = 45;
+const COUNTDOWN = 5;
 const SHAKE_THRESHOLD = 18;
 const SHAKE_COUNT_NEEDED = 3;
 const SHAKE_WINDOW_MS = 2000;
@@ -200,7 +200,16 @@ export default function VictimScreen({ navigation }) {
     try {
       await Audio.requestPermissionsAsync();
       await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
-      const { recording } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
+      const { recording } = await Audio.Recording.createAsync(
+        Audio.RecordingOptionsPresets.HIGH_QUALITY,
+        (status) => {
+          if (status.isRecording && status.isMeteringEnabled && status.metering > -12) {
+            // High decibel detected (scream / voice tremor)
+            setMotionResult(prev => ({ ...prev, riskScore: Math.max(prev.riskScore, 90) }));
+          }
+        },
+        500 // 500ms intervals
+      );
       audioRecordingRef.current = recording;
     } catch (err) { console.log('Audio record error', err); }
   }

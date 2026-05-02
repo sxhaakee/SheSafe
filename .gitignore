@@ -1,11 +1,11 @@
-# Environment files
+# ── Secrets ────────────────────────────────────────────────────────────────
 .env
 .env.local
 backend/.env
 firebase_service_account.json
 backend/firebase_service_account.json
 
-# Python
+# ── Python ─────────────────────────────────────────────────────────────────
 __pycache__/
 *.py[cod]
 *$py.class
@@ -17,22 +17,29 @@ build/
 venv/
 .venv/
 
-# SQLite (auto-generated on startup)
+# ── SQLite (auto-generated on startup) ─────────────────────────────────────
 backend/data/police_stations.db
 
-# OS
+# ── Node / React Native ─────────────────────────────────────────────────────
+node_modules/
+.next/
+*.log
+
+# ── Android build output ────────────────────────────────────────────────────
+shesafe-app/android/app/build/
+shesafe-app/android/.gradle/
+shesafe-app/android/build/
+*.apk
+
+# ── Expo ────────────────────────────────────────────────────────────────────
+shesafe-app/.expo/
+
+# ── OS ─────────────────────────────────────────────────────────────────────
 .DS_Store
 Thumbs.db
 
-# IDE
+# ── IDE ─────────────────────────────────────────────────────────────────────
 .vscode/
 .idea/
 *.swp
 *.swo
-
-# Logs
-*.log
-
-# Node (for dashboard)
-node_modules/
-.next/

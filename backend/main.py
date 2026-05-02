@@ -1,6 +1,5 @@
 """
 SHESAFE Backend — FastAPI Entry Point
-The brain of the SHESAFE passive women safety system.
 """
 
 from fastapi import FastAPI
@@ -15,35 +14,32 @@ from api.risk import router as risk_router
 from api.alerts import router as alerts_router, init_firebase
 from api.auth import router as auth_router
 
-# Global Firebase db reference (set by init_firebase, used by auth module)
-db = None
-
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Initialize database and Firebase on startup."""
+    """Initialize all services on startup."""
     print(f"[{settings.APP_NAME}] Starting backend v{settings.APP_VERSION}...")
 
-    # Initialize SQLite police station DB
+    # SQLite police station database
     init_db()
     print(f"[{settings.APP_NAME}] Police station database ready.")
 
-    # Initialize Supabase (replaces Firebase)
+    # Supabase (persistent user/alert storage)
     if supabase_configured():
         print(f"[{settings.APP_NAME}] Supabase connected — persistent storage active.")
     else:
         print(f"[{settings.APP_NAME}] Supabase NOT configured — running with in-memory store only.")
 
-    # Also call init_firebase for compatibility (it now connects Supabase internally)
+    # Alert notification system
     init_firebase()
 
-    # Check Twilio
+    # Twilio SMS/WhatsApp
     if settings.is_twilio_configured():
         print(f"[{settings.APP_NAME}] Twilio configured — SMS will be sent live.")
     else:
         print(f"[{settings.APP_NAME}] Twilio NOT configured — running in DEMO mode (SMS simulated).")
 
-    print(f"[{settings.APP_NAME}] ✅ Backend ready. All systems operational.")
+    print(f"[{settings.APP_NAME}] ✅ Backend ready.")
     yield
     print(f"[{settings.APP_NAME}] Shutting down...")
 
@@ -59,7 +55,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# ── CORS — Allow React Native app to connect from any origin ──
+# Allow the React Native app to connect from any origin
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -68,17 +64,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ── Mount routers ──
+# Routers
 app.include_router(auth_router)
 app.include_router(police_router)
 app.include_router(risk_router)
 app.include_router(alerts_router)
 
 
-# ── Health check ──
 @app.get("/ping")
 async def ping():
-    """Health check endpoint. Also returns active alert IDs for mobile app polling."""
+    """Health check. Returns active alert IDs for mobile polling."""
     from api.alerts import active_alerts
     active = [aid for aid, data in active_alerts.items() if not data.get("is_safe", False)]
     return {

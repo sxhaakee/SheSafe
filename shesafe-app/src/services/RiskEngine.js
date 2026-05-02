@@ -54,13 +54,13 @@ export function computeRisk({
   // Anti-false-alarm rules
   let adjustedMotion = motionScore;
 
-  // Struggling requires gyro confirmation (real struggle causes rotation)
-  if (motionState === 'struggling' && gyroMagnitude < 1.5) {
-    adjustedMotion = Math.min(adjustedMotion, 40);
+  // Struggling requires gyro confirmation (real struggle causes rotation) - RELAXED FOR DEMO
+  if (motionState === 'struggling' && gyroMagnitude < 0.5) {
+    adjustedMotion = Math.min(adjustedMotion, 60);
   }
-  // Need 3+ consecutive windows (6 seconds) of struggling
-  if (motionState === 'struggling' && consecutiveStruggleWindows < 3) {
-    adjustedMotion = Math.min(adjustedMotion, 55);
+  // Need 3+ consecutive windows (6 seconds) of struggling - RELAXED FOR DEMO
+  if (motionState === 'struggling' && consecutiveStruggleWindows < 1) {
+    adjustedMotion = Math.min(adjustedMotion, 70);
   }
   // Dropped phone alone → reduce (user may have set it down)
   if (motionState === 'phone_dropped' && getBehaviorScore(behaviorFlags) < 30) {

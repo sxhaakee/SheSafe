@@ -1,6 +1,6 @@
 // SheSafe — Contact / Family Screen
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Linking, RefreshControl, ScrollView, StatusBar, Animated } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Linking, RefreshControl, ScrollView, StatusBar, Animated, Vibration } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import MapView, { Marker, Polyline } from 'react-native-maps';
 import { Ionicons } from '@expo/vector-icons';
@@ -25,7 +25,10 @@ export default function ContactScreen() {
     getStoredUser().then(setUser);
     fetchAlerts();
     pollRef.current = setInterval(fetchAlerts, POLL_MS);
-    return () => clearInterval(pollRef.current);
+    return () => {
+      clearInterval(pollRef.current);
+      Vibration.cancel();
+    };
   }, []);
 
   async function handleLogout() {
@@ -52,12 +55,18 @@ export default function ContactScreen() {
       if (data.active_alerts?.length > 0) {
         const detail = await ApiService.getAlertStatus(data.active_alerts[0]);
         setActiveAlert(detail);
+        if (detail && !detail.is_safe) {
+           Vibration.vibrate([0, 500, 200, 500], true);
+        } else {
+           Vibration.cancel();
+        }
         if (detail.location_pings?.length > 0) {
           setLastPing(detail.location_pings[detail.location_pings.length - 1]);
         }
       } else {
         setActiveAlert(null);
         setLastPing(null);
+        Vibration.cancel();
       }
     } catch {}
   }

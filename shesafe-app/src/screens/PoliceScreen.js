@@ -1,6 +1,6 @@
 // SheSafe — Police Dashboard Screen
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Linking, RefreshControl, StatusBar, Animated } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Linking, RefreshControl, StatusBar, Animated, Vibration } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import MapView, { Marker, Callout } from 'react-native-maps';
 import { Ionicons } from '@expo/vector-icons';
@@ -93,6 +93,7 @@ export default function PoliceScreen() {
     return () => {
       clearInterval(pollRef.current);
       pulse.stop();
+      Vibration.cancel();
     };
   }, []);
 
@@ -108,9 +109,16 @@ export default function PoliceScreen() {
         const details = await Promise.all(
           data.active_alerts.map(id => ApiService.getAlertStatus(id).catch(() => null))
         );
-        setAlerts(details.filter(Boolean).sort((a, b) => b.risk_score - a.risk_score));
+        const validAlerts = details.filter(Boolean).sort((a, b) => b.risk_score - a.risk_score);
+        setAlerts(validAlerts);
+        if (validAlerts.some(a => !a.is_safe)) {
+           Vibration.vibrate([0, 500, 200, 500], true);
+        } else {
+           Vibration.cancel();
+        }
       } else {
         setAlerts([]);
+        Vibration.cancel();
       }
       setLastUpdate(new Date());
     } catch {}

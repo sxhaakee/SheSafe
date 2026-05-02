@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "SheSafe",
-    "slug": "shesafe-app",
+    "slug": "shesafe",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -43,8 +43,9 @@
     ],
     "extra": {
       "eas": {
-        "projectId": "d21db62e-f00e-47ee-b935-d213fd50ee59"
+        "projectId": "a6fc61e2-f55d-48ae-9c20-3ed0e12d85a1"
       }
-    }
+    },
+    "owner": "chinnu123"
   }
 }
