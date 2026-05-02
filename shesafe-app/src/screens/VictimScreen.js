@@ -20,7 +20,7 @@ import ApiService from '../services/ApiService';
 import { uploadEvidence } from '../services/EvidenceService';
 
 const { width } = Dimensions.get('window');
-const COUNTDOWN = 5;
+const COUNTDOWN = 45;  // 45-second countdown before alert fires
 const SHAKE_THRESHOLD = 18;
 const SHAKE_COUNT_NEEDED = 3;
 const SHAKE_WINDOW_MS = 2000;
@@ -177,7 +177,9 @@ export default function VictimScreen({ navigation }) {
           consecutiveStruggleWindows: consecutiveStruggle.current,
         });
         setRisk(r);
-        if (r.alertLevel >= 1 && !alertActive) triggerEmergency('passive');
+        // Only auto-trigger on full alert (level 2) from real physical struggle
+        // Manual SOS and shake trigger directly — they don't go through this path
+        if (r.alertLevel === 2 && !alertActive) triggerEmergency('passive');
         return prev;
       });
     }, 5000);

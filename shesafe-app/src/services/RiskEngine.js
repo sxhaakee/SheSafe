@@ -1,10 +1,17 @@
-// SheSafe — Multi-Signal Risk Engine (Demo-Optimised)
-// Thresholds lowered so demo triggers reliably at real-world motion levels.
+// SheSafe — Multi-Signal Risk Engine (Correctly Calibrated)
+// Passive trigger ONLY fires on real, sustained physical struggle.
+// Manual SOS and shake always bypass thresholds.
 
-const WEIGHTS = { motion: 0.40, location: 0.25, time: 0.20, behavior: 0.15 };
-const ELEVATED = 40;   // Signal counts as elevated above this
-const FULL_ALERT = 55; // Final weighted score for full alert (was 75 — too high)
-const SOFT_ALERT = 35; // Score for soft alert (contacts only)
+const WEIGHTS = { motion: 0.50, location: 0.20, time: 0.15, behavior: 0.15 };
+
+// These thresholds are for PASSIVE auto-detection only.
+// Manual SOS / Shake always trigger regardless.
+const ELEVATED = 50;    // Signal must exceed this to count as "elevated"
+const FULL_ALERT = 72;  // Weighted score needed for full passive alert (police + contacts)
+// Stationary baseline: motion=10, location=85, time=85, behavior=0
+// → 0.50*10 + 0.20*85 + 0.15*85 + 0.15*0 = 5 + 17 + 12.75 + 0 = 34.75 → safe ✅
+// Struggling (motion=80): 0.50*80 + 17 + 12.75 = 40 + 17 + 12.75 = 69.75 → near threshold
+// Struggling + gyro (motion=80, behavior=30): = 40+17+12.75+4.5 = 74.25 → TRIGGERS ✅
 
 // Vemana College — demo isolated zone
 const ISOLATED_ZONES = [
@@ -21,7 +28,7 @@ function haversineMeters(lat1, lng1, lat2, lng2) {
 }
 
 function getTimeScore() {
-  // DEMO: Simulate 2 AM (deep night) — guaranteed high risk
+  // DEMO: Simulate late-night time to boost environmental risk
   return 85;
 }
 
@@ -31,11 +38,12 @@ function getLocationScore(lat, lng) {
 }
 
 function getBehaviorScore(flags = {}) {
-  let score = 20; // Base behavior score (phone in pocket = slightly elevated)
-  if (flags.screenDarkAndStill) score += 40;
-  if (flags.airplaneModeOn) score += 90;
-  if (flags.headphonesDisconnected) score += 20;
-  if (flags.appBackgrounded) score += 10;
+  // NO base score — behavior only elevated by specific events
+  let score = 0;
+  if (flags.screenDarkAndStill) score += 40;    // Phone face-down
+  if (flags.airplaneModeOn)     score += 90;    // Attacker cutting comms
+  if (flags.headphonesDisconnected) score += 20; // Sudden disconnect
+  if (flags.appBackgrounded)    score += 10;
   return Math.min(score, 100);
 }
 
@@ -53,24 +61,24 @@ export function computeRisk({
 }) {
   let adjustedMotion = motionScore;
 
-  // Gyro confirmation still required but threshold relaxed for demo
-  if (motionState === 'struggling' && gyroMagnitude < 0.3) {
-    adjustedMotion = Math.min(adjustedMotion, 75);
-  }
-  // Need 1+ consecutive window (was 3) — more responsive for demo
-  if (motionState === 'struggling' && consecutiveStruggleWindows < 1) {
-    adjustedMotion = Math.min(adjustedMotion, 80);
-  }
-  // Dropped phone — still reduce slightly
-  if (motionState === 'phone_dropped' && getBehaviorScore(behaviorFlags) < 30) {
+  // Struggling requires some gyro confirmation (real struggle causes body rotation)
+  if (motionState === 'struggling' && gyroMagnitude < 0.4) {
     adjustedMotion = Math.min(adjustedMotion, 65);
+  }
+  // Need at least 1 consecutive struggling window (2 seconds) before going full alert
+  if (motionState === 'struggling' && consecutiveStruggleWindows < 1) {
+    adjustedMotion = Math.min(adjustedMotion, 72);
+  }
+  // Dropped phone without prior gyro activity → probably just set it down
+  if (motionState === 'phone_dropped' && gyroMagnitude < 0.3) {
+    adjustedMotion = Math.min(adjustedMotion, 50);
   }
 
   const locationScore = getLocationScore(lat, lng, nearestPoliceDistanceM);
   const timeScore = getTimeScore();
   const behaviorScore = getBehaviorScore(behaviorFlags);
 
-  // Weighted final score
+  // Weighted final score — motion is now 50% weight
   const riskScore = Math.round(
     WEIGHTS.motion * adjustedMotion +
     WEIGHTS.location * locationScore +
@@ -82,14 +90,13 @@ export function computeRisk({
   const signals = { motion: adjustedMotion, location: locationScore, time: timeScore, behavior: behaviorScore };
   const elevatedCount = Object.values(signals).filter(v => v >= ELEVATED).length;
 
-  // Determine alert level (manual always triggers full)
-  const isManual = ['manual_sos', 'shake_trigger'].includes(motionState);
-
+  // PASSIVE trigger only at FULL_ALERT (alertLevel 2)
+  // Manual SOS/shake bypass this entirely — they call triggerEmergency() directly
   let alertLevel = 0;
-  if (isManual || (elevatedCount >= 2 && riskScore >= FULL_ALERT)) {
+  if (elevatedCount >= 2 && riskScore >= FULL_ALERT) {
     alertLevel = 2; // Full alert → police + contacts
-  } else if (elevatedCount >= 1 && riskScore >= SOFT_ALERT) {
-    alertLevel = 1; // Soft alert → contacts only
+  } else if (elevatedCount >= 1 && riskScore >= 55) {
+    alertLevel = 1; // Soft alert — contacts only (no auto-trigger)
   }
 
   return {

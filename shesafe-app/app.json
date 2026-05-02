@@ -14,7 +14,10 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.shesafe.app"
+      "bundleIdentifier": "com.shesafe.app",
+      "config": {
+        "googleMapsApiKey": "AIzaSyD-9tSrke72PouQMnMX-a7eZSW0jkFMBWY"
+      }
     },
     "android": {
       "package": "com.shesafe.app",
@@ -22,10 +25,17 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#FFFFFF"
       },
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyD-9tSrke72PouQMnMX-a7eZSW0jkFMBWY"
+        }
+      },
       "permissions": [
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION",
         "VIBRATE",
+        "RECORD_AUDIO",
+        "CAMERA",
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_FINE_LOCATION"
       ]
@@ -38,6 +48,12 @@
         "expo-location",
         {
           "locationAlwaysAndWhenInUsePermission": "SheSafe needs your location to detect danger zones."
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "SheSafe needs camera access to record evidence during emergencies."
         }
       ]
     ],
